@@ -17,7 +17,7 @@ Companion docs: `updater.md` (how the updater works), `build.md` (building/testi
 
 | Item | Value |
 |---|---|
-| Published version | 1.2 (versionCode 3) |
+| Published version | 1.3 (versionCode 4) |
 | Installed on TV | 1.2 (versionCode 3) |
 | Package | `com.priyabrat.medusa` |
 | Signing cert SHA-256 | `1e11bdb1a4638bfa287145a86e83fe1c3312e41f6fff7e6fc717a2591e31a2ec` |
@@ -31,7 +31,7 @@ Companion docs: `updater.md` (how the updater works), `build.md` (building/testi
 1. **Never change `applicationId`** (`com.priyabrat.medusa`). A new ID is a different app; the old one never updates again.
 2. **Never lose, replace or regenerate the signing key.** `release.jks` + `keystore.properties` (project root, git-ignored). Android refuses updates signed by another key. Keep a backup outside the project (USB drive or password manager).
 3. **Every APK must be signed with that key.** `check_apk.py` verifies the cert SHA-256 above. If `keystore.properties` is missing, Gradle silently signs with the default debug key: check_apk catches this.
-4. **`versionCode` must go up on every publish** (by 1). Never reuse or lower it. `versionName` must also be new (it is the APK filename).
+4. **`versionCode` must go up on every publish** (by 1). Never reuse or lower it. It is the only number the updater and Android compare. `versionName` (e.g. 1.3) is display text: keep it until Prince calls a major update. The APK filename is `medusa-<versionName>-b<versionCode>.apk`, so it is always unique.
 5. **Never publish an APK from Android Studio's Run button.** Run output (`app/build/intermediates/apk/...`) is `testOnly` and the TV installer rejects it as "package appears to be invalid". Use the **Assemble** button output (`app/build/outputs/apk/debug/app-debug.apk`) or `assembleRelease`.
 6. **Never publish without `python3 scripts/check_apk.py <apk>` printing PASS.**
 7. **The update channel is frozen forever.** Do not change: the repo owner/name, its public visibility, the `updates` branch name, the filename `latest.json`, its field names or types, or `Updater.MANIFEST_URL`. Old builds on the TV only know this exact URL and schema. Migration rules are in `updater.md`.
@@ -60,3 +60,4 @@ Companion docs: `updater.md` (how the updater works), `build.md` (building/testi
 | 1.0 | 1 | Broken: published from Run output (testOnly). Do not reuse. |
 | 1.1 | 2 | First clean build. Installed on TV by sideload. |
 | 1.2 | 3 | Update test: TV updated 1.1 -> 1.2 by itself. Loop confirmed 2026-11-20. |
+| 1.3 | 4 | New Medusa icon + TV banner. First APK named by build (`medusa-1.3-b4.apk`). 2026-11-20. |

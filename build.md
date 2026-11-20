@@ -48,10 +48,10 @@ Read `rules.md` first.
 ## Release steps (every update)
 
 1. Make the code change in the Mac folder.
-2. In `app/build.gradle.kts` set `versionCode = <published + 1>` and `versionName = "<new unique name>"` (e.g. 1.3).
+2. In `app/build.gradle.kts` set `versionCode = <published + 1>` and `versionName` only for a major update (Prince decides; otherwise keep it).
 3. Studio: **Sync** (if Gradle files changed), then **Assemble**. Wait for a new timestamp on `app/build/outputs/apk/debug/app-debug.apk`.
 4. `bash scripts/release.sh debug "what changed"` (from the project root, Mac or sandbox).
-   - Copies the APK to `dist/medusa-<versionName>.apk`, runs `check_apk.py`, writes `dist/latest.json` from the APK.
+   - Copies the APK to `dist/medusa-<versionName>-b<versionCode>.apk`, runs `check_apk.py`, writes `dist/latest.json` from the APK.
    - Any FAIL = stop and fix. Never edit latest.json by hand to get around it.
 5. If the change touches anything in `rules.md` rule 13: run the **update-loop test** below.
 6. Publish both files (`github.md`).

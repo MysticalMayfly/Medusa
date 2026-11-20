@@ -21,9 +21,9 @@ android {
         applicationId = "com.priyabrat.medusa"
         minSdk = 34
         targetSdk = 37
-        // Bump BOTH for every release (versionCode must always go up)
-        versionCode = 3
-        versionName = "1.2"
+        // versionCode +1 on EVERY release (never reuse/lower). versionName only for a major update.
+        versionCode = 4
+        versionName = "1.3"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }

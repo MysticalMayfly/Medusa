@@ -9,7 +9,7 @@ Read `rules.md` first.
 | Repo | `https://github.com/MysticalMayfly/Medusa` (**public**, must stay public) |
 | Clone URL used | `https://github.com/MysticalMayfly/medusa` (lowercase works) |
 | `main` | Source code. Mirror of the Mac project minus git-ignored files. |
-| `updates` | **Published update channel.** Only `latest.json` + the current `medusa-<versionName>.apk`. Linear history, one commit per publish. |
+| `updates` | **Published update channel.** Only `latest.json` + the current `medusa-<versionName>-b<versionCode>.apk`. Linear history, one commit per publish. |
 | Releases / tags | Not used (see constraints). |
 
 Never: force-push, delete or rename either branch, rename/transfer/delete the repo, or make it private. Installed apps read
@@ -25,7 +25,7 @@ Never: force-push, delete or rename either branch, rename/transfer/delete the re
 
 ## Publish an update (sandbox)
 
-Prerequisite: `scripts/release.sh` PASSED and produced `dist/medusa-<V>.apk` + `dist/latest.json` (see `build.md`).
+Prerequisite: `scripts/release.sh` PASSED and produced `dist/medusa-<V>.apk` (`<V>` = `<versionName>-b<versionCode>`, e.g. `1.3-b5`) + `dist/latest.json` (see `build.md`).
 
 1. Stage both files from the Mac into the sandbox:
    `device_stage_files` with

@@ -48,7 +48,7 @@ Location: branch `updates`, repo root, `https://raw.githubusercontent.com/Mystic
 |---|---|---|---|
 | `versionCode` | integer | yes | Equals the APK's versionCode. Read with `getLong`. |
 | `versionName` | string | yes | Equals the APK's versionName. Shown on the button. |
-| `apkUrl` | string (https) | yes | Must already exist on the branch. Pattern: `.../updates/medusa-<versionName>.apk`. |
+| `apkUrl` | string (https) | yes | Must already exist on the branch. Pattern: `.../updates/medusa-<versionName>-b<versionCode>.apk` (was `medusa-<versionName>.apk` up to 1.2; the app does not care about the name). |
 | `sha256` | string | optional in code, **always set it** | SHA-256 of the exact APK file. |
 | `notes` | string | optional | Not shown yet. |
 

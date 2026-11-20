@@ -1,5 +1,5 @@
 #!/bin/bash
-# Prepares a Medusa update in dist/: medusa-<versionName>.apk + latest.json.
+# Prepares a Medusa update in dist/: medusa-<versionName>-b<versionCode>.apk + latest.json.
 # It does NOT publish. Publishing = commit both files to the `updates` branch (see github.md).
 #
 #   scripts/release.sh debug  "notes"   # uses the APK from Studio's Assemble button (tested path)
@@ -11,6 +11,7 @@ cd "$(dirname "$0")/.."
 MODE="${1:-debug}"
 NOTES="${2:-}"
 NAME=$(grep -E '^\s*versionName\s*=' app/build.gradle.kts | sed -E 's/.*"(.*)".*/\1/')
+CODE=$(grep -E '^\s*versionCode\s*=' app/build.gradle.kts | sed -E 's/[^0-9]*([0-9]+).*/\1/')
 
 if [ "$MODE" = "release" ]; then
   ./gradlew --quiet assembleRelease
@@ -23,7 +24,7 @@ fi
 [ -f "$SRC" ] || { echo "Missing $SRC. Build it first."; exit 1; }
 
 mkdir -p dist
-APK="dist/medusa-$NAME.apk"
+APK="dist/medusa-$NAME-b$CODE.apk"   # unique per build: same versionName can repeat, versionCode never does
 cp "$SRC" "$APK"
 
 python3 scripts/check_apk.py "$APK"     # exits non-zero on any problem
