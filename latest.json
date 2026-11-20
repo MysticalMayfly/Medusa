@@ -1,7 +1,7 @@
 {
-  "versionCode": 4,
+  "versionCode": 5,
   "versionName": "1.3",
-  "apkUrl": "https://raw.githubusercontent.com/MysticalMayfly/medusa/updates/medusa-1.3-b4.apk",
-  "sha256": "badcc2f737a6ddafb1d1de14db11395fa937acdfcd46ced6f92ecc7b2b7f1b52",
-  "notes": "New Medusa app icon and TV banner"
+  "apkUrl": "https://raw.githubusercontent.com/MysticalMayfly/medusa/updates/medusa-1.3-b5.apk",
+  "sha256": "4f8797a466a5c80ad8f2dc27fbb91b51bdbc15e17e3a3f82c9b32a537626cef9",
+  "notes": "Sharper icon and TV banner (hi-res, unscaled)"
 }
