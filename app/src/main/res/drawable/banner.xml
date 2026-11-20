@@ -1,5 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- 320x180 TV launcher banner (art: drawable-nodpi/banner_hd.png, 1280x720, unscaled so it stays sharp on 4K) -->
+<!-- 320x180dp TV banner. Art per density: drawable-xhdpi 640x360 (the TV: 1080p UI, 320dpi), xxhdpi 960x540, xxxhdpi 1280x720 -->
 <bitmap xmlns:android="http://schemas.android.com/apk/res/android"
-    android:src="@drawable/banner_hd"
-    android:gravity="fill" />
+    android:src="@drawable/banner_art"
+    android:gravity="fill"
+    android:filter="true"
+    android:antialias="true"
+    android:mipMap="true" />

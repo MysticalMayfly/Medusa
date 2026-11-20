@@ -12,8 +12,8 @@ Status: **Shipped** (in a published build) Â· **Kept** (wanted, not built yet) Â
 | New app icon (Medusa emblem) | Shipped | 1.3 (b4) | Reworked in b5. |
 | New TV banner (Medusa artwork, 16:9) | Shipped | 1.3 (b4) | Prince's 16:9 image. Reworked in b5. |
 | APK named by build number, versionName only for major updates | Shipped | 1.3 (b4) | `medusa-<versionName>-b<versionCode>.apk`. Rule 4 updated. |
-| Hi-res unscaled icon and banner | Shipped | 1.3 (b5) | Looked worse on the TV. To be replaced by per-density images sized to the TV. |
-| Per-density icon/banner sized to the TV's real density | Kept | | Waiting on TV density reading over wireless debugging. |
+| Hi-res unscaled icon and banner | Shipped, then replaced | 1.3 (b5) | Looked worse on the TV. Replaced in b6. |
+| Per-density icon/banner sized to the TV's real density | Shipped | 1.3 (b6) | TV UI is 1080p @ 320 dpi (xhdpi), so the 640x360 banner and 216 px icon are used 1:1. |
 | Loading screen recreated from the desktop Medusa app (light animation, lines in an editable file) | Kept | | Plan approved in principle; Prince said not to start yet. |
 | Automatic update checks on a timer + auto-install | Dropped | | Prince dropped it 2026-11-20. Checks stay on launch + button. |
 | Showing `notes` from latest.json on screen | Idea | | From `updater.md`. |

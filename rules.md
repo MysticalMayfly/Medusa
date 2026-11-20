@@ -20,14 +20,14 @@ plus `scripts/check_apk.py` and `scripts/release.sh`.
 
 | Item | Value |
 |---|---|
-| Published version | 1.3 (versionCode 5) |
-| Installed on TV | 1.2 (versionCode 3) |
+| Published version | 1.3 (versionCode 6) |
+| Installed on TV | 1.3 (versionCode 5), self-installed (read by adb 2026-11-20) |
 | Package | `com.priyabrat.medusa` |
 | Signing cert SHA-256 | `1e11bdb1a4638bfa287145a86e83fe1c3312e41f6fff7e6fc717a2591e31a2ec` |
 | Update manifest | `https://raw.githubusercontent.com/MysticalMayfly/medusa/updates/latest.json` |
 | Repo | `github.com/MysticalMayfly/Medusa` (public) |
 | Project on Mac | `/Users/mysticalmirage/AndroidStudioProjects/Medusa` |
-| TV | Smart_TV_Pro (G08_4K_GB), Android 14 / API 34, IP 192.168.1.9 (DHCP, may change) |
+| TV | Smart_TV_Pro (G08_4K_GB), Android 14 / API 34, IP 192.168.1.9 (DHCP, may change). 4K panel, UI runs 1920x1080 @ 320 dpi (xhdpi). Google TV launcher. Mac adb is paired with it. |
 
 ## Golden rules (never break)
 
@@ -64,4 +64,5 @@ plus `scripts/check_apk.py` and `scripts/release.sh`.
 | 1.1 | 2 | First clean build. Installed on TV by sideload. |
 | 1.2 | 3 | Update test: TV updated 1.1 -> 1.2 by itself. Loop confirmed 2026-11-20. |
 | 1.3 | 4 | New Medusa icon + TV banner. First APK named by build (`medusa-1.3-b4.apk`). 2026-11-20. |
-| 1.3 | 5 | Hi-res icon (1152 px) and banner (1280x720) in drawable-nodpi so 4K launchers show them sharp. 2026-11-20. |
+| 1.3 | 5 | Hi-res icon (1152 px) and banner (1280x720) in drawable-nodpi. Looked worse on the TV (launcher downscale). 2026-11-20. |
+| 1.3 | 6 | Icon + banner per density, lossless; xhdpi 640x360 banner = exact size for the TV (1080p UI, 320 dpi). 2026-11-20. |
