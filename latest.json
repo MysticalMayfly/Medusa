@@ -1,7 +1,7 @@
 {
-  "versionCode": 1,
-  "versionName": "1.0",
-  "apkUrl": "https://raw.githubusercontent.com/MysticalMayfly/medusa/updates/medusa-1.0.apk",
-  "sha256": "e91d46782d061c7fda3343ddf219d5ab38d41fbdb41ce10dbe5fa881197fd779",
-  "notes": "First screen and self-updater"
+  "versionCode": 2,
+  "versionName": "1.1",
+  "apkUrl": "https://raw.githubusercontent.com/MysticalMayfly/medusa/updates/medusa-1.1.apk",
+  "sha256": "059bcfbb2832c566c018f7c8b22ee2a8d3d6971eeb45d48deb62bb7de43b9109",
+  "notes": "Update test"
 }
