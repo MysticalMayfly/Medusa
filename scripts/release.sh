@@ -1,5 +1,5 @@
 #!/bin/bash
-# Builds a signed release APK + latest.json into dist/ (run from the project root on the Mac)
+# Builds a signed release APK + latest.json into dist/, ready for the "updates" branch
 set -e
 cd "$(dirname "$0")/.."
 CODE=$(grep -E '^\s*versionCode\s*=' app/build.gradle.kts | grep -oE '[0-9]+')
@@ -14,15 +14,10 @@ cat > dist/latest.json <<JSON
 {
   "versionCode": $CODE,
   "versionName": "$NAME",
-  "apkUrl": "https://github.com/MysticalMayfly/Medusa/releases/download/v$NAME/medusa-$NAME.apk",
+  "apkUrl": "https://raw.githubusercontent.com/MysticalMayfly/medusa/updates/medusa-$NAME.apk",
   "sha256": "$SHA",
   "notes": "$NOTES"
 }
 JSON
 echo "Built $APK (versionCode $CODE)"
-if command -v gh >/dev/null; then
-  gh release create "v$NAME" "$APK" dist/latest.json --repo MysticalMayfly/Medusa --title "Medusa $NAME" --notes "$NOTES"
-  echo "Published v$NAME"
-else
-  echo "gh not installed: upload $APK and dist/latest.json to a new GitHub release tagged v$NAME"
-fi
+echo "Next: push dist/medusa-$NAME.apk and dist/latest.json to the \"updates\" branch"

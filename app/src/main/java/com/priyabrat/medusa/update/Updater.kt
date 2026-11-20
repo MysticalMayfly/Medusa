@@ -18,7 +18,7 @@ import java.security.MessageDigest
 import java.util.concurrent.Executors
 
 /**
- * Self-updater. Reads latest.json from the newest GitHub release, downloads the APK
+ * Self-updater. Reads latest.json from GitHub, downloads the APK
  * and installs it with PackageInstaller. The APK must be signed with the same key.
  */
 class Updater(private val activity: Activity, private val listener: Listener) {
@@ -26,9 +26,9 @@ class Updater(private val activity: Activity, private val listener: Listener) {
     companion object {
         private const val TAG = "MedusaUpdater"
 
-        /** Always points at the newest release's latest.json */
+        /** latest.json on the repo's "updates" branch (each publish overwrites it) */
         const val MANIFEST_URL =
-            "https://github.com/MysticalMayfly/Medusa/releases/latest/download/latest.json"
+            "https://raw.githubusercontent.com/MysticalMayfly/medusa/updates/latest.json"
 
         fun installedVersionCode(ctx: Context): Long =
             ctx.packageManager.getPackageInfo(ctx.packageName, 0).longVersionCode
@@ -80,7 +80,7 @@ class Updater(private val activity: Activity, private val listener: Listener) {
         post(State.Checking)
         io.execute {
             try {
-                val info = UpdateInfo.parse(httpGet(MANIFEST_URL))
+                val info = UpdateInfo.parse(httpGet("$MANIFEST_URL?t=${System.currentTimeMillis()}"))
                 val installed = installedVersionCode(activity)
                 Log.i(TAG, "installed=$installed latest=${info.versionCode}")
                 if (info.versionCode > installed) {
