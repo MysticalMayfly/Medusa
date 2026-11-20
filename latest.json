@@ -1,7 +1,7 @@
 {
-  "versionCode": 3,
-  "versionName": "1.2",
-  "apkUrl": "https://raw.githubusercontent.com/MysticalMayfly/medusa/updates/medusa-1.2.apk",
-  "sha256": "17678e21a601e3bfecf41bd39926b540a892f601fb6c17f8c98dd9fe37c76088",
-  "notes": "TV update test"
+  "versionCode": 4,
+  "versionName": "1.3",
+  "apkUrl": "https://raw.githubusercontent.com/MysticalMayfly/medusa/updates/medusa-1.3-b4.apk",
+  "sha256": "badcc2f737a6ddafb1d1de14db11395fa937acdfcd46ced6f92ecc7b2b7f1b52",
+  "notes": "New Medusa app icon and TV banner"
 }
