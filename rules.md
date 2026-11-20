@@ -17,7 +17,7 @@ Companion docs: `updater.md` (how the updater works), `build.md` (building/testi
 
 | Item | Value |
 |---|---|
-| Published version | 1.3 (versionCode 4) |
+| Published version | 1.3 (versionCode 5) |
 | Installed on TV | 1.2 (versionCode 3) |
 | Package | `com.priyabrat.medusa` |
 | Signing cert SHA-256 | `1e11bdb1a4638bfa287145a86e83fe1c3312e41f6fff7e6fc717a2591e31a2ec` |
@@ -61,3 +61,4 @@ Companion docs: `updater.md` (how the updater works), `build.md` (building/testi
 | 1.1 | 2 | First clean build. Installed on TV by sideload. |
 | 1.2 | 3 | Update test: TV updated 1.1 -> 1.2 by itself. Loop confirmed 2026-11-20. |
 | 1.3 | 4 | New Medusa icon + TV banner. First APK named by build (`medusa-1.3-b4.apk`). 2026-11-20. |
+| 1.3 | 5 | Hi-res icon (1152 px) and banner (1280x720) in drawable-nodpi so 4K launchers show them sharp. 2026-11-20. |
