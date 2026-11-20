@@ -11,7 +11,10 @@ Every rule below exists to keep that loop alive. Breaking one can strand the TV 
 version, and the only fix is a manual uninstall + sideload (all app data lost).
 
 Companion docs: `updater.md` (how the updater works), `build.md` (building/testing),
-`github.md` (publishing), plus `scripts/check_apk.py` and `scripts/release.sh`.
+`github.md` (publishing), `changelog.md` (published builds), `features.md` (every feature and its status),
+plus `scripts/check_apk.py` and `scripts/release.sh`.
+
+**Before making any change: read `changelog.md`. Before shipping any change: check `features.md`.**
 
 ## Current state (update this table after every publish)
 
@@ -50,7 +53,7 @@ Companion docs: `updater.md` (how the updater works), `build.md` (building/testi
 - Deleting files in the Mac folder needs the user's permission (bridge rule). Overwriting is fine.
 - Never block the chat on long waits (over ~60 s) with no output. Say what you are waiting for (e.g. GitHub's ~5 min cache) and check back.
 - The user turns TV debugging OFF when not in use. Updates never need debugging; only first installs and log reading do.
-- After a publish: update the "Current state" table above.
+- After a publish: update the "Current state" table above, add the build to `changelog.md` (published builds only), and update `features.md` (status + build number).
 - User preferences: short bullet replies, no em dashes, minimal token use, desktop over cloud.
 
 ## Version history

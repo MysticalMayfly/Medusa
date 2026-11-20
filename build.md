@@ -47,6 +47,7 @@ Read `rules.md` first.
 
 ## Release steps (every update)
 
+0. Read `changelog.md` and check `features.md` (status of what you are about to ship).
 1. Make the code change in the Mac folder.
 2. In `app/build.gradle.kts` set `versionCode = <published + 1>` and `versionName` only for a major update (Prince decides; otherwise keep it).
 3. Studio: **Sync** (if Gradle files changed), then **Assemble**. Wait for a new timestamp on `app/build/outputs/apk/debug/app-debug.apk`.
@@ -56,7 +57,7 @@ Read `rules.md` first.
 5. If the change touches anything in `rules.md` rule 13: run the **update-loop test** below.
 6. Publish both files (`github.md`).
 7. Push source to `main` (`github.md`).
-8. Update the "Current state" table and version history in `rules.md`.
+8. Update the "Current state" table and version history in `rules.md`, add the build to `changelog.md`, and update `features.md`.
 
 ## Update-loop test (emulator)
 
