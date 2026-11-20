@@ -22,8 +22,8 @@ android {
         minSdk = 34
         targetSdk = 37
         // Bump BOTH for every release (versionCode must always go up)
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = 2
+        versionName = "1.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
