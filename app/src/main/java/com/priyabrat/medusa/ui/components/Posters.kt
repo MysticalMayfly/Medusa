@@ -17,19 +17,24 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.lazy.LazyListPrefetchStrategy
 import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.focusRestorer
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.CompositingStrategy
+import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -50,9 +55,9 @@ import com.priyabrat.medusa.ui.theme.Shapes
  * Stage 2 replaces this with the real poster or backdrop image.
  */
 @Composable
-fun ArtPlaceholder(label: String?, modifier: Modifier = Modifier, tint: Color = MedusaColors.Raised) {
+fun ArtPlaceholder(label: String?, modifier: Modifier = Modifier, tint: Color = MedusaColors.Raised, shape: Shape = RectangleShape) {
     Box(
-        modifier.background(Brush.linearGradient(listOf(tint, MedusaColors.Surface))),
+        modifier.background(Brush.linearGradient(listOf(tint, MedusaColors.Surface)), shape),
         contentAlignment = Alignment.Center,
     ) {
         if (label != null) {
@@ -88,30 +93,34 @@ fun PosterCard(card: TitleCard, onOpen: (String) -> Unit, modifier: Modifier = M
             Modifier
                 .fillMaxWidth()
                 .aspectRatio(2f / 3f)
+                // Lift, scale and the shadow that grows with the lift, all in one layer. Set here
+                // (layer phase), the animation only redraws; as .shadow((14 * lift).dp) it rebuilt the
+                // whole card on every frame of every focus move.
                 .graphicsLayer {
                     translationY = -Motion.PosterLift * density * lift
                     val s = 1f + (Motion.PosterScale - 1f) * lift
                     scaleX = s; scaleY = s
-                }
-                .focusRing(focused, radius = 8.dp, width = 2.5.dp)
-                // The shadow grows with the lift. Set here (layer phase), the animation only redraws;
-                // as .shadow((14 * lift).dp) it rebuilt the whole card on every frame of every focus move.
-                .graphicsLayer {
                     shadowElevation = 14.dp.toPx() * lift
                     shape = Shapes.Poster
                     clip = false
-                },
+                }
+                .focusRing(focused, radius = 8.dp, width = 2.5.dp),
         ) {
+            // Speed: the rounded art is drawn with its shape instead of clipped (a clip is an extra layer
+            // per poster), and the 40 % fade layer is only added to watched titles.
             ArtPlaceholder(
                 card.title,
                 Modifier
                     .fillMaxSize()
-                    .clip(Shapes.Poster)
-                    .border(1.dp, MedusaColors.Line, Shapes.Poster)
-                    .graphicsLayer {
-                        alpha = if (card.watched) 0.4f else 1f
-                        compositingStrategy = CompositingStrategy.ModulateAlpha
-                    },
+                    .then(
+                        if (card.watched) {
+                            Modifier.graphicsLayer { alpha = 0.4f; compositingStrategy = CompositingStrategy.ModulateAlpha }
+                        } else {
+                            Modifier
+                        },
+                    )
+                    .border(1.dp, MedusaColors.Line, Shapes.Poster),
+                shape = Shapes.Poster,
             )
             if (card.badge != null) {
                 Text(
@@ -122,8 +131,7 @@ fun PosterCard(card: TitleCard, onOpen: (String) -> Unit, modifier: Modifier = M
                     modifier = Modifier
                         .align(Alignment.TopStart)
                         .padding(5.dp)
-                        .clip(Shapes.Pill)
-                        .background(Color(0xB8000000))
+                        .background(Color(0xB8000000), Shapes.Pill)
                         .padding(horizontal = 6.dp, vertical = 2.dp),
                 )
             }
@@ -134,7 +142,7 @@ fun PosterCard(card: TitleCard, onOpen: (String) -> Unit, modifier: Modifier = M
                 modifier = Modifier.align(Alignment.TopEnd).padding(5.dp),
             ) {
                 Box(
-                    Modifier.size(Dimens.HeartBtn).clip(CircleShape).background(MedusaColors.CardScrim),
+                    Modifier.size(Dimens.HeartBtn).background(MedusaColors.CardScrim, CircleShape),
                     contentAlignment = Alignment.Center,
                 ) {
                     Icon(
@@ -163,7 +171,7 @@ fun PosterCard(card: TitleCard, onOpen: (String) -> Unit, modifier: Modifier = M
             modifier = Modifier.padding(top = 4.dp),
         )
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            if (card.dotArgb != null) Box(Modifier.size(5.dp).clip(CircleShape).background(Color(card.dotArgb)))
+            if (card.dotArgb != null) Box(Modifier.size(5.dp).background(Color(card.dotArgb), CircleShape))
             Text(card.subtitle, style = MedusaType.PosterSub, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
     }
@@ -173,17 +181,25 @@ fun PosterCard(card: TitleCard, onOpen: (String) -> Unit, modifier: Modifier = M
 @Composable
 fun ShelfHeader(title: String, modifier: Modifier = Modifier, count: Int? = null, dotArgb: Long? = null, seeAll: String? = null, onSeeAll: (() -> Unit)? = null) {
     Row(modifier, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        if (dotArgb != null) Box(Modifier.size(7.dp).clip(CircleShape).background(Color(dotArgb)))
+        if (dotArgb != null) Box(Modifier.size(7.dp).background(Color(dotArgb), CircleShape))
         Text(title, style = MedusaType.ShelfTitle)
         if (count != null) Text(count.toString(), style = MedusaType.Mono, color = MedusaColors.Faint)
         if (seeAll != null && onSeeAll != null) LinkPill(seeAll, onSeeAll)
     }
 }
 
-/** A sideways-scrolling row of posters (.tn-row). No scroll bar; focus comes back to the last poster you left. */
-@OptIn(ExperimentalComposeUiApi::class)
+/**
+ * A sideways-scrolling row of posters (.tn-row). No scroll bar; focus comes back to the last poster you left.
+ *
+ * Speed: when the page is about to scroll a shelf into view, Compose builds it ahead of time in the
+ * idle gaps between frames. By default that covers only the first 2 posters, so the rest of the row
+ * was still built in the very frame the row appeared, which dropped frames on the TV. Prefetching a
+ * whole screen width of posters moves that work out of the scroll.
+ */
+@OptIn(ExperimentalComposeUiApi::class, ExperimentalFoundationApi::class)
 @Composable
 fun ShelfRow(shelf: Shelf, onOpen: (String) -> Unit, modifier: Modifier = Modifier, onSeeAll: (() -> Unit)? = null) {
+    val rowState = rememberLazyListState(prefetchStrategy = remember { LazyListPrefetchStrategy(nestedPrefetchItemCount = PostersPerScreen) })
     Column(modifier.fillMaxWidth()) {
         ShelfHeader(
             shelf.title,
@@ -195,10 +211,11 @@ fun ShelfRow(shelf: Shelf, onOpen: (String) -> Unit, modifier: Modifier = Modifi
         )
         LazyRow(
             modifier = Modifier.fillMaxWidth().focusRestorer(),
+            state = rowState,
             contentPadding = PaddingValues(start = Dimens.SafeH, end = Dimens.SafeH, top = 12.dp, bottom = 8.dp),
             horizontalArrangement = Arrangement.spacedBy(Dimens.Gap14),
         ) {
-            items(shelf.items, key = { it.id }) { PosterCard(it, onOpen) }
+            items(shelf.items, key = { it.id }, contentType = { "poster" }) { PosterCard(it, onOpen) }
         }
     }
 }
@@ -218,8 +235,8 @@ fun ContinueCard(item: ContinueItem, onOpen: (String) -> Unit, onTick: (String) 
                     .aspectRatio(16f / 9f)
                     .graphicsLayer { translationY = -2 * density * lift }
                     .focusRing(focused, radius = 9.dp, width = 2.5.dp)
-                    .clip(androidx.compose.foundation.shape.RoundedCornerShape(9.dp))
-                    .border(1.dp, MedusaColors.Line, androidx.compose.foundation.shape.RoundedCornerShape(9.dp)),
+                    .border(1.dp, MedusaColors.Line, ContinueShape),
+                shape = ContinueShape,
             )
             ProgressLine(item.progress, MedusaColors.Accent, Modifier.fillMaxWidth().padding(top = 3.dp), height = 3.dp, track = MedusaColors.Line)
             Text(item.title, style = MedusaType.PosterTitle, maxLines = 1, modifier = Modifier.padding(top = 5.dp))
@@ -228,6 +245,11 @@ fun ContinueCard(item: ContinueItem, onOpen: (String) -> Unit, onTick: (String) 
         Pill("✓ " + item.nextLabel, onClick = { onTick(item.id) }, height = 22.dp, textStyle = MedusaType.Small, modifier = Modifier.padding(top = 3.dp))
     }
 }
+
+/** Posters that fit across the screen at once (960 dp wide, [Dimens.PosterW] plus the gap): 8 and a part. */
+private const val PostersPerScreen = 10
+
+private val ContinueShape = androidx.compose.foundation.shape.RoundedCornerShape(9.dp)
 
 /** Spacer height between page sections. */
 val SectionGap: Dp = Dimens.Gap26

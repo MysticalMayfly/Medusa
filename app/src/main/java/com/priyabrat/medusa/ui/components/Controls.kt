@@ -283,13 +283,12 @@ fun LinkPill(text: String, onClick: () -> Unit, modifier: Modifier = Modifier, f
 /** Thin progress bar (.prog-track, .pbar .track, .uv-hbar). */
 @Composable
 fun ProgressLine(fraction: Float, color: Color, modifier: Modifier = Modifier, height: Dp = 4.dp, track: Color = MedusaColors.Track) {
-    Box(modifier.height(height).clip(Shapes.Pill).background(track)) {
+    Box(modifier.height(height).background(track, Shapes.Pill)) {
         Box(
             Modifier
                 .height(height)
                 .fillMaxWidth(fraction.coerceIn(0f, 1f))
-                .clip(Shapes.Pill)
-                .background(color),
+                .background(color, Shapes.Pill),
         )
     }
 }

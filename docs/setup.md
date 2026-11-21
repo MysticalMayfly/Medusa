@@ -32,7 +32,7 @@ Environment reference: the Mac, toolchain, Android Studio, sandbox, GitHub, TV a
 |---|---|---|---|
 | **Run 'app'** (green play) | `app/build/intermediates/apk/debug/app-debug.apk` | **No** (`testOnly`) | **Never** |
 | **Assemble 'app' Run Configuration** (hammer icon), Build Variant **debug** | `app/build/outputs/apk/debug/app-debug.apk` | Yes | Only b2 to b7. Debuggable and unoptimized: Compose is very slow on the TV |
-| **Assemble**, Build Variant **release** (or `./gradlew assembleRelease` in a Mac terminal) | `app/build/outputs/apk/release/app-release.apk` | Yes | Yes (from b8; R8 + baseline profiles). First one needs the update-loop test |
+| **Assemble**, Build Variant **release** (or `./gradlew assembleRelease` in a Mac terminal) | `app/build/outputs/apk/release/app-release.apk` | Yes | Yes (from b8; R8 + baseline profiles, Medusa's own from b9). First one needs the update-loop test |
 
 - Debug and release are signed with the same key, so switching from debug builds to release builds later is a normal update.
 - Run also installs onto the selected device. Assemble only builds.

@@ -114,7 +114,7 @@ fun LazyListScope.posterWall(items: List<TitleCard>, onOpen: (String) -> Unit) {
         return
     }
     val rows = items.chunked(Dimens.WallColumns)
-    items(rows.size, key = { "wall-" + rows[it].first().id }) { r ->
+    items(rows.size, key = { "wall-" + rows[it].first().id }, contentType = { "wall-row" }) { r ->
         Row(
             Modifier.fillMaxWidth().padding(horizontal = Dimens.SafeH),
             horizontalArrangement = Arrangement.spacedBy(Dimens.WallGapH),
