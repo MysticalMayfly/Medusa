@@ -52,7 +52,7 @@ missing = sorted(cited - builds, key=lambda b: int(b[1:]))
 if missing:
     sys.exit("FEATURES.md cites builds missing from CHANGELOG.md: " + ", ".join(missing))
 notes = rows[0][4] if len(rows[0]) > 4 else ""
-notes = re.sub(r"\*\*|`", "", notes).replace("\\|", "|").strip()   # plain string, no markdown
+notes = re.sub(r"\*\*|\x60", "", notes).replace("\\|", "|").strip()   # plain string, no markdown (\x60 is a backtick: a literal one breaks macOS bash 3.2)
 if not notes:
     sys.exit("CHANGELOG.md: the Changes cell of b%s is empty" % code)
 print(notes)
