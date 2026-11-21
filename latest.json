@@ -1,7 +1,7 @@
 {
-  "versionCode": 7,
+  "versionCode": 8,
   "versionName": "1.3",
-  "apkUrl": "https://raw.githubusercontent.com/MysticalMayfly/medusa/updates/medusa-1.3-b7.apk",
-  "sha256": "6a53842a11340b2c123dfba971208db83c0690527e4def8af000fb2bca2f1a29",
-  "notes": "New Compose for TV screens (stage 1 template on placeholder data): header and tabs, Home, Movies, TV shows, Horror Standard, More, Universes, details panel, search and Settings. Check for updates moved to the Settings screen. Published without the emulator update-loop test at Prince's request."
+  "apkUrl": "https://raw.githubusercontent.com/MysticalMayfly/medusa/updates/medusa-1.3-b8.apk",
+  "sha256": "3d992e24b8d89bd6568e31a90fc6d4e615c98316c26998e559e80531b25376df",
+  "notes": "Speed: first release (R8) build with a baseline profile instead of a debug APK. Carousel zoom off, lighter focus animations, rows no longer fade in again on scroll. Focus fixes: Up from a screen lands on the open tab, Up next buttons, leaving the search field with the D-pad, the Settings button during an update check."
 }
