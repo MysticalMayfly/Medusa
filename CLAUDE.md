@@ -9,6 +9,7 @@
    - `docs/setup.md`: the Mac, toolchain, Android Studio, sandbox, GitHub, TV and adb.
    - `docs/release.md`: the checklist from code change to publish to syncing `main`.
    - `docs/updater.md`: how the updater works and the frozen `latest.json` format.
+   - `docs/SLOTS.md`: every value on every screen and where it comes from (UI code is in `app/.../ui`, data only through `data/MedusaRepository`).
 
 ## Session behaviour
 

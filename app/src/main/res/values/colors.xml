@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="bg_dark">#FF0A0F14</color>
+    <color name="bg_dark">#FF0A0F14</color> <!-- launcher icon background -->
+    <color name="window_bg">#FF07070B</color> <!-- the Mac app's bg token -->
     <color name="bg_mid">#FF102129</color>
     <color name="card">#FF16232C</color>
     <color name="accent">#FF2EC4B6</color>

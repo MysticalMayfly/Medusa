@@ -31,6 +31,6 @@ version, and the only fix is a manual uninstall + sideload (all app data lost).
 8. **`latest.json` and its APK go in the same commit.** latest.json must never point at a file that does not exist yet.
 9. **Never force-push, rewrite, delete or rename the `updates` branch.** Never force-push, delete or rename `main`.
 10. **Never raise `minSdk` above 34.** The TV is Android 14 (API 34); a higher minSdk makes the APK uninstallable there.
-11. **Never remove** the `INTERNET` / `REQUEST_INSTALL_PACKAGES` permissions, the `InstallResultReceiver` manifest entry, or the update button and its `Updater` wiring in `MainActivity`. Without them the next version cannot be pulled.
+11. **Never remove** the `INTERNET` / `REQUEST_INSTALL_PACKAGES` permissions, the `InstallResultReceiver` manifest entry, or the "Check for updates" button (Settings screen, `ui/settings/SettingsScreen.kt`) and its `Updater` wiring in `MainActivity`. Without them the next version cannot be pulled.
 12. **Never commit secrets** to git: `release.jks`, `*.jks`, `keystore.properties`, `local.properties`, `dist/`. They are in `.gitignore`; check before every push. Do not remove those lines from `.gitignore`.
 13. **Test the update on the emulator before publishing anything that touches** `update/*`, `AndroidManifest.xml`, `build.gradle.kts`, `MainActivity`'s update wiring, signing or SDK levels (procedure in `docs/release.md`, "Update-loop test").

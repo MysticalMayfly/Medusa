@@ -104,8 +104,8 @@ Goal: prove the **currently published** version can update to the **new** one.
 2. Bump the version and press **Assemble** (not Run: Run would install the new version directly and skip the test).
 3. Write its `CHANGELOG.md` row, run `bash scripts/release.sh debug`, then publish to `updates` ("Publish to `updates`" above).
 4. Wait until the raw latest.json shows the new versionCode (the cache may lag, see `docs/updater.md` Caching).
-5. In Studio's Running Devices pane, use the on-screen D-pad: focus "Check for updates", press the centre button (OK). Accept the install prompt if shown.
-6. Reopen Medusa: the version card must show the new version and build.
+5. In Studio's Running Devices pane, use the on-screen D-pad: open Settings (gear, top right), focus "Check for updates", press the centre button (OK). Accept the install prompt if shown.
+6. Reopen Medusa and open Settings: the version line must show the new version and build.
 7. Read Logcat (tag `MedusaUpdater`) if anything fails.
 
 If a change might break updating, publish a throwaway test build first (one build as the test, the next build as the real one) rather than risk the TV.
