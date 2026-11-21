@@ -9,7 +9,7 @@ Status: **Shipped** (in a published build) Â· **Kept** (wanted, not built yet) Â
 |---|---|---|---|
 | Home screen (brand, title, version card) | Shipped | b2 | Replaced by the stage 1 screens below once they ship. |
 | Self-updater: "Check for updates" button, sha256 check, PackageInstaller | Shipped | b2 | Check on launch + button. Loop confirmed in b3. Button moves to Settings with the stage 1 screens. |
-| Stage 1 screens in Compose for TV, from the Mac app (header and tabs, Home, Movies, TV shows, Horror Standard, More, Universes and each universe, details panel, search, Settings) | Kept | | Built as an empty template on placeholder data (`data/FakeMedusaRepository`), not published. Needs the emulator update-loop test (rule 13). |
+| Stage 1 screens in Compose for TV, from the Mac app (header and tabs, Home, Movies, TV shows, Horror Standard, More, Universes and each universe, details panel, search, Settings) | Kept | | Built as an empty template on placeholder data (`data/FakeMedusaRepository`), not published. Compiles and runs on the TV emulator (2026-11-21). Needs the emulator update-loop test (rule 13). |
 | Carousel trailers (android-youtube-player) | Kept | | Stage 1 milestone 6. Hook: `HeroPick.trailerId`. |
 | Real database behind `MedusaRepository` (stage 2) | Kept | | Screens stay the same; `docs/SLOTS.md` maps each value. |
 | App icon (Medusa emblem) | Shipped | b4 | Current form from b6, history in `CHANGELOG.md`. |

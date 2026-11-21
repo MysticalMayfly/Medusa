@@ -119,7 +119,7 @@ fun PosterCard(card: TitleCard, onOpen: (String) -> Unit, modifier: Modifier = M
                         .padding(horizontal = 6.dp, vertical = 2.dp),
                 )
             }
-            AnimatedVisibility(
+            androidx.compose.animation.AnimatedVisibility(
                 visible = focused || card.interested,
                 enter = fadeIn(tween(Motion.HeartMs)),
                 exit = fadeOut(tween(Motion.HeartMs)),
