@@ -61,6 +61,11 @@ android {
     }
 }
 
+// Speed: screen state in ui/model is immutable, so Compose can skip cards and rows that did not change.
+composeCompiler {
+    stabilityConfigurationFiles.add(project.layout.projectDirectory.file("compose-stability.conf"))
+}
+
 dependencies {
     implementation(libs.androidx.appcompat)
     implementation(libs.androidx.core.ktx)

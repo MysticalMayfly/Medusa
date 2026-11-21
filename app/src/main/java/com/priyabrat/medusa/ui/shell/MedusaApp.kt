@@ -13,7 +13,9 @@ import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.focus.FocusRequester
 import com.priyabrat.medusa.data.FilterKeys
 import com.priyabrat.medusa.data.MedusaRepository
@@ -94,8 +96,11 @@ fun MedusaApp(repo: MedusaRepository, settings: SettingsUiState, onUpdateButton:
         )
     }
 
-    val open: (String) -> Unit = { panelId = it }
-    val hero = HeroActions(onOpen = open, onInterested = repo::setInterested, onSeen = repo::setWatched)
+    // Actions are built once (remember), not on every recomposition of the shell. A new object each
+    // time made Compose rebuild the whole open screen whenever the shell changed, e.g. when the
+    // details panel opened or the update status moved.
+    val open: (String) -> Unit = remember { { panelId = it } }
+    val hero = remember(repo) { HeroActions(onOpen = open, onInterested = repo::setInterested, onSeen = repo::setWatched) }
 
     CompositionLocalProvider(LocalToast provides toast::show) {
         Box(Modifier.fillMaxSize().background(MedusaColors.Bg)) {
@@ -103,18 +108,16 @@ fun MedusaApp(repo: MedusaRepository, settings: SettingsUiState, onUpdateButton:
                 is Screen.Top -> when (s.tab) {
                     Tab.Home -> {
                         val state by remember { repo.home() }.collectAsState(HomeUiState())
-                        HomeScreen(
-                            state,
-                            HomeActions(hero, open, repo::markEpisodeWatched, onSeeAll = { go(Screen.Top(Tab.Horror)) }),
-                            header,
-                        )
+                        val actions = remember(repo) {
+                            HomeActions(hero, open, repo::markEpisodeWatched, onSeeAll = { go(Screen.Top(Tab.Horror)) })
+                        }
+                        HomeScreen(state, actions, header)
                     }
                     Tab.Movies, Tab.Shows, Tab.More -> {
                         val kind = when (s.tab) { Tab.Movies -> BrowseKind.Movies; Tab.Shows -> BrowseKind.Shows; else -> BrowseKind.More }
                         val key = FilterKeys.browse(kind)
                         val state by remember(kind) { repo.browse(kind) }.collectAsState(BrowseUiState(kind))
-                        BrowseScreen(
-                            state,
+                        val actions = remember(repo, kind) {
                             BrowseActions(
                                 hero = hero,
                                 onOpen = open,
@@ -122,15 +125,14 @@ fun MedusaApp(repo: MedusaRepository, settings: SettingsUiState, onUpdateButton:
                                 onSegment = { repo.selectFilter(key, FilterKeys.GROUP_SEGMENT, it) },
                                 onSelect = { sel, opt -> repo.selectFilter(key, FilterKeys.select(sel), opt) },
                                 onToggleUnwatched = { repo.toggleFilter(key, FilterKeys.FLAG_UNWATCHED) },
-                            ),
-                            header,
-                        )
+                            )
+                        }
+                        BrowseScreen(state, actions, header)
                     }
                     Tab.Horror -> {
                         val state by remember { repo.horror() }.collectAsState(HorrorUiState())
                         val h = FilterKeys.HORROR
-                        HorrorScreen(
-                            state,
+                        val actions = remember(repo) {
                             HorrorActions(
                                 hero = hero,
                                 onOpen = open,
@@ -139,9 +141,9 @@ fun MedusaApp(repo: MedusaRepository, settings: SettingsUiState, onUpdateButton:
                                 onWhere = { repo.selectFilter(h, FilterKeys.GROUP_WHERE, it) },
                                 onSelect = { sel, opt -> repo.selectFilter(h, FilterKeys.select(sel), opt) },
                                 onSeeAll = { repo.selectFilter(h, FilterKeys.GROUP_TAB, "all") },
-                            ),
-                            header,
-                        )
+                            )
+                        }
+                        HorrorScreen(state, actions, header)
                     }
                     Tab.Universes -> {
                         val state by remember { repo.universes() }.collectAsState(UniversesUiState())
@@ -151,17 +153,16 @@ fun MedusaApp(repo: MedusaRepository, settings: SettingsUiState, onUpdateButton:
                 is Screen.Universe -> {
                     val state by remember(s.id) { repo.universe(s.id) }.collectAsState(UniverseUiState())
                     val key = FilterKeys.universe(s.id)
-                    UniverseScreen(
-                        state,
+                    val actions = remember(repo, s.id) {
                         UniverseActions(
                             onBack = { stack.removeAt(stack.lastIndex) },
                             onOpen = open,
                             onWatched = repo::setWatched,
                             onSegment = { repo.selectFilter(key, FilterKeys.GROUP_SEGMENT, it) },
                             onToggleHideWatched = { repo.toggleFilter(key, FilterKeys.FLAG_HIDE_WATCHED) },
-                        ),
-                        header,
-                    )
+                        )
+                    }
+                    UniverseScreen(state, actions, header)
                 }
                 Screen.Search -> {
                     val state by remember(query) { repo.search(query) }.collectAsState(SearchUiState(query))
@@ -176,7 +177,7 @@ fun MedusaApp(repo: MedusaRepository, settings: SettingsUiState, onUpdateButton:
             val detail by remember(id) { repo.detail(id) }.collectAsState(initial = null as TitleDetail?)
             DetailPanel(
                 detail,
-                DetailActions(onWatched = repo::setWatched, onInterested = repo::setInterested),
+                remember(repo) { DetailActions(onWatched = repo::setWatched, onInterested = repo::setInterested) },
                 onClose = { panelId = null },
             )
         }
@@ -196,8 +197,11 @@ fun MedusaApp(repo: MedusaRepository, settings: SettingsUiState, onUpdateButton:
 /** Focus a control as soon as it is on screen (screens fill in a moment after they open). */
 private suspend fun FocusRequester.requestWhenReady() {
     repeat(40) {
-        val r = runCatching { requestFocus() }
-        if (r.isSuccess && (r.getOrNull() as Any?) != false) return
+        // Wait a frame first: until then the requester can still point at the old screen's control,
+        // which is about to be removed, and focus would fall to some other control on the new screen.
+        withFrameNanos { }
+        // The no-argument requestFocus() drops the result; this overload says whether focus moved.
+        if (runCatching { requestFocus(FocusDirection.Enter) }.getOrDefault(false)) return
         delay(50)
     }
 }

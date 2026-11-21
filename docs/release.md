@@ -7,9 +7,9 @@ One checklist from code change to publish to syncing `main`. Rules: `docs/RULES.
 0. Reading order from `CLAUDE.md` done (top rows of `CHANGELOG.md`, `FEATURES.md` for the status of what you are about to ship).
 1. Make the code change in the Mac folder.
 2. In `app/build.gradle.kts` set `versionCode = <published + 1>` (`scripts/status.sh` prints the published one) and `versionName` only for a major update (Prince decides; otherwise keep it).
-3. Studio: **Sync** (if Gradle files changed), then **Assemble**. Wait for a new timestamp on `app/build/outputs/apk/debug/app-debug.apk`.
+3. Studio: **Sync** (if Gradle files changed). In the **Build Variants** panel set `app` to **release**, then press **Assemble**. Wait for a new timestamp on `app/build/outputs/apk/release/app-release.apk`. (Release builds from b8 on: the debug APK is debuggable and unoptimized, and Compose runs many times slower on the TV. Switch back to **debug** for everyday Run on the emulator.)
 4. Write the new build's row at the top of `CHANGELOG.md`: Build `b<versionCode>`, Version `<versionName>`, Date (IST), APK (file name per `docs/RULES.md` rule 4), Changes. The Changes cell becomes `notes` in `latest.json`, so write it as plain text.
-5. `bash scripts/release.sh debug` (from the project root, Mac or sandbox).
+5. `bash scripts/release.sh` (from the project root, Mac or sandbox; `release` is the default, `debug` is the old path).
    - Stops unless the top `CHANGELOG.md` row is `b<versionCode>` and every build cited in `FEATURES.md` has a `CHANGELOG.md` row.
    - Copies the APK to `dist/` (named per `docs/RULES.md` rule 4), runs `check_apk.py --offline`, writes `dist/latest.json` from the APK, with `notes` from the Changes cell.
    - Any FAIL = stop and fix. Never edit latest.json by hand to get around it.
@@ -101,8 +101,8 @@ Possible if the user has git + GitHub credentials on the Mac: clone `updates` to
 Goal: prove the **currently published** version can update to the **new** one.
 
 1. Make sure the emulator runs the currently published version. If not, install it: build that version with Run, or install its APK.
-2. Bump the version and press **Assemble** (not Run: Run would install the new version directly and skip the test).
-3. Write its `CHANGELOG.md` row, run `bash scripts/release.sh debug`, then publish to `updates` ("Publish to `updates`" above).
+2. Bump the version, set Build Variants to **release** and press **Assemble** (not Run: Run would install the new version directly and skip the test).
+3. Write its `CHANGELOG.md` row, run `bash scripts/release.sh`, then publish to `updates` ("Publish to `updates`" above).
 4. Wait until the raw latest.json shows the new versionCode (the cache may lag, see `docs/updater.md` Caching).
 5. In Studio's Running Devices pane, use the on-screen D-pad: open Settings (gear, top right), focus "Check for updates", press the centre button (OK). Accept the install prompt if shown.
 6. Reopen Medusa and open Settings: the version line must show the new version and build.

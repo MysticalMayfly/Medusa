@@ -19,6 +19,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
@@ -120,7 +121,8 @@ fun AppHeader(
 private fun NavItem(label: String, selected: Boolean, onClick: () -> Unit, requester: FocusRequester) {
     val f = rememberFocusable()
     val focused = f.focused.value
-    val bg by animateColorAsState(
+    // Read only while drawing, so the tab's colour change redraws it without rebuilding the header.
+    val bg = animateColorAsState(
         when {
             selected -> MedusaColors.Fg
             focused -> MedusaColors.Raised
@@ -134,7 +136,7 @@ private fun NavItem(label: String, selected: Boolean, onClick: () -> Unit, reque
             .focusRing(focused, offset = 2.dp)
             .height(Dimens.NavItemH)
             .clip(Shapes.Pill)
-            .background(bg)
+            .drawBehind { drawRect(bg.value) }
             .tvClick(f, onClick = onClick)
             .padding(horizontal = 11.dp),
         contentAlignment = Alignment.Center,

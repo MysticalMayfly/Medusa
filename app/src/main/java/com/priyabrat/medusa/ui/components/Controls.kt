@@ -19,6 +19,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
@@ -73,7 +74,8 @@ fun Pill(
         style == PillStyle.Segment -> Color.Transparent
         else -> MedusaColors.Surface
     }
-    val bg by animateColorAsState(bgTarget, tween(Motion.ColorMs), label = "pillBg")
+    // Read only while drawing (drawBehind), so the 150 ms colour change redraws the pill without rebuilding it.
+    val bg = animateColorAsState(bgTarget, tween(Motion.ColorMs), label = "pillBg")
     val fg = when {
         filled -> MedusaColors.Inv
         focused || style == PillStyle.Default && selected -> MedusaColors.Fg
@@ -85,9 +87,11 @@ fun Pill(
             .focusRing(focused)
             .defaultMinSize(minHeight = height)
             .clip(Shapes.Pill)
-            .background(bg)
+            .drawBehind { drawRect(bg.value) }
             .border(1.dp, line, Shapes.Pill)
-            .tvClick(f, enabled, onClick)
+            // A disabled pill stays focusable (OK does nothing), so focus does not jump away when
+            // a button greys out under it, e.g. Check for updates while it checks.
+            .tvClick(f) { if (enabled) onClick() }
             .graphicsLayer { alpha = if (enabled) 1f else 0.5f }
             .padding(horizontal = 11.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -140,13 +144,13 @@ fun IconCircle(
     f: Focusable = rememberFocusable(),
 ) {
     val focused = f.focused.value
-    val bg by animateColorAsState(if (focused) MedusaColors.Fg else MedusaColors.Surface, tween(Motion.ColorMs), label = "iconBg")
+    val bg = animateColorAsState(if (focused) MedusaColors.Fg else MedusaColors.Surface, tween(Motion.ColorMs), label = "iconBg")
     Box(modifier.size(size), contentAlignment = Alignment.Center) {
         Box(
             Modifier
                 .size(size)
                 .clip(CircleShape)
-                .background(bg)
+                .drawBehind { drawRect(bg.value) }
                 .border(1.dp, if (focused) MedusaColors.Fg else MedusaColors.Line, CircleShape)
                 .tvClick(f, onClick = onClick),
             contentAlignment = Alignment.Center,
@@ -177,7 +181,7 @@ fun GlassRound(
     f: Focusable = rememberFocusable(),
 ) {
     val focused = f.focused.value
-    val bg by animateColorAsState(
+    val bg = animateColorAsState(
         when {
             on && onTint == MedusaColors.Accent -> MedusaColors.Accent.copy(alpha = 0.28f)
             focused -> Color.White.copy(alpha = 0.16f)
@@ -190,7 +194,7 @@ fun GlassRound(
             .focusRing(focused)
             .size(Dimens.HeroBtn)
             .clip(CircleShape)
-            .background(bg)
+            .drawBehind { drawRect(bg.value) }
             .border(1.dp, if (on && onTint == MedusaColors.Accent) MedusaColors.Accent.copy(alpha = 0.7f) else if (focused) Color.White.copy(alpha = 0.55f) else MedusaColors.GlassLine, CircleShape)
             .tvClick(f, onClick = onClick),
         contentAlignment = Alignment.Center,
