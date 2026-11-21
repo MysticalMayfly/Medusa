@@ -1,38 +1,47 @@
 package com.priyabrat.medusa
 
 import android.os.Bundle
-import android.view.View
-import android.widget.Button
-import android.widget.ProgressBar
-import android.widget.TextView
+import androidx.activity.compose.setContent
 import androidx.appcompat.app.AppCompatActivity
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import com.priyabrat.medusa.data.FakeMedusaRepository
+import com.priyabrat.medusa.data.MedusaRepository
+import com.priyabrat.medusa.ui.model.SettingsUiState
+import com.priyabrat.medusa.ui.shell.MedusaApp
+import com.priyabrat.medusa.ui.theme.MedusaTheme
 import com.priyabrat.medusa.update.Updater
 
+/**
+ * Hosts the Compose UI and owns the self-updater wiring (docs/RULES.md rule 11).
+ * The "Check for updates" button now sits on the Settings screen; it calls [Updater.onButtonPressed] here.
+ */
 class MainActivity : AppCompatActivity(), Updater.Listener {
 
-    private lateinit var status: TextView
-    private lateinit var progress: ProgressBar
-    private lateinit var updateButton: Button
     private lateinit var updater: Updater
+
+    /** Stage 1: placeholder data. Stage 2 swaps in the real repository here; screens stay the same. */
+    private val repository: MedusaRepository = FakeMedusaRepository()
+
+    private var settings by mutableStateOf(
+        SettingsUiState(version = "", status = "", buttonLabel = "", buttonEnabled = true, progressPercent = null, updateWaiting = false),
+    )
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContentView(R.layout.activity_main)
-
-        status = findViewById(R.id.status)
-        progress = findViewById(R.id.progress)
-        updateButton = findViewById(R.id.btn_update)
         updater = Updater(this, this)
+        settings = settings.copy(
+            version = getString(R.string.version_fmt, Updater.installedVersionName(this), Updater.installedVersionCode(this)),
+            status = getString(R.string.status_idle),
+            buttonLabel = getString(R.string.btn_check),
+        )
 
-        findViewById<TextView>(R.id.version).text =
-            getString(R.string.version_fmt, Updater.installedVersionName(this), Updater.installedVersionCode(this))
-
-        updateButton.setOnFocusChangeListener { v, hasFocus ->
-            val s = if (hasFocus) 1.06f else 1f
-            v.animate().scaleX(s).scaleY(s).setDuration(120).start()
+        setContent {
+            MedusaTheme {
+                MedusaApp(repository, settings, onUpdateButton = { updater.onButtonPressed() })
+            }
         }
-        updateButton.setOnClickListener { updater.onButtonPressed() }
-        updateButton.requestFocus()
 
         // Quiet check on launch; installing still needs a button press
         if (savedInstanceState == null) updater.check()
@@ -51,28 +60,33 @@ class MainActivity : AppCompatActivity(), Updater.Listener {
     // ---- Updater.Listener ----
 
     override fun onState(state: Updater.State) {
-        progress.visibility = View.GONE
-        updateButton.isEnabled = true
-        updateButton.text = getString(R.string.btn_check)
-        status.text = when (state) {
+        var label = getString(R.string.btn_check)
+        var enabled = true
+        var percent: Int? = null
+        val status = when (state) {
             Updater.State.Idle -> getString(R.string.status_idle)
-            Updater.State.Checking -> { updateButton.isEnabled = false; getString(R.string.status_checking) }
+            Updater.State.Checking -> { enabled = false; getString(R.string.status_checking) }
             Updater.State.UpToDate -> getString(R.string.status_latest)
             is Updater.State.Available -> {
-                updateButton.text = getString(R.string.btn_install, state.info.versionName)
+                label = getString(R.string.btn_install, state.info.versionName)
                 getString(R.string.status_available, state.info.versionName)
             }
             is Updater.State.Downloading -> {
-                updateButton.isEnabled = false
-                progress.visibility = View.VISIBLE
-                progress.progress = state.percent
+                enabled = false
+                percent = state.percent
                 getString(R.string.status_downloading, state.info.versionName, state.percent)
             }
-            Updater.State.Installing -> { updateButton.isEnabled = false; getString(R.string.status_installing) }
+            Updater.State.Installing -> { enabled = false; getString(R.string.status_installing) }
             Updater.State.NeedsPermission -> getString(R.string.status_need_permission)
             Updater.State.NoPermissionScreen -> getString(R.string.status_no_permission_screen)
             is Updater.State.Failed -> getString(R.string.status_error, state.reason)
         }
-        if (updateButton.isEnabled && !updateButton.hasFocus()) updateButton.requestFocus()
+        settings = settings.copy(
+            status = status,
+            buttonLabel = label,
+            buttonEnabled = enabled,
+            progressPercent = percent,
+            updateWaiting = state is Updater.State.Available || state is Updater.State.NeedsPermission,
+        )
     }
 }

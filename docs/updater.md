@@ -10,7 +10,8 @@ still reach the next one.
 | `app/src/main/java/com/priyabrat/medusa/update/Updater.kt` | Check, download, verify, install. Holds `MANIFEST_URL`. |
 | `app/src/main/java/com/priyabrat/medusa/update/UpdateInfo.kt` | Parses `latest.json`. |
 | `app/src/main/java/com/priyabrat/medusa/update/InstallResultReceiver.kt` | Receives the PackageInstaller result. |
-| `app/src/main/java/com/priyabrat/medusa/MainActivity.kt` | Owns the "Check for updates" button and shows updater state. |
+| `app/src/main/java/com/priyabrat/medusa/MainActivity.kt` | Owns the `Updater` and turns its state into the Settings screen's state; the button press comes back here. |
+| `app/src/main/java/com/priyabrat/medusa/ui/settings/SettingsScreen.kt` | Shows the "Check for updates" button, status and progress (gear icon, top right). |
 | `app/src/main/AndroidManifest.xml` | `INTERNET`, `REQUEST_INSTALL_PACKAGES`, `<receiver .update.InstallResultReceiver exported=false>`. |
 
 ## Flow
