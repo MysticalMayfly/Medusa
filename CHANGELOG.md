@@ -8,6 +8,7 @@ If that build is then not published, remove its row.
 
 | Build | Version | Date | APK | Changes |
 |---|---|---|---|---|
+| b8 | 1.3 | 2026-11-22 | `medusa-1.3-b8.apk` | Speed: first release (R8) build with a baseline profile instead of a debug APK. Carousel zoom off, lighter focus animations, rows no longer fade in again on scroll. Focus fixes: Up from a screen lands on the open tab, Up next buttons, leaving the search field with the D-pad, the Settings button during an update check. |
 | b7 | 1.3 | 2026-11-21 | `medusa-1.3-b7.apk` | New Compose for TV screens (stage 1 template on placeholder data): header and tabs, Home, Movies, TV shows, Horror Standard, More, Universes, details panel, search and Settings. Check for updates moved to the Settings screen. Published without the emulator update-loop test at Prince's request. |
 | b6 | 1.3 | 2026-11-21 | `medusa-1.3-b6.apk` | Icon and TV banner sized per density, all lossless PNG. Banner 640x360 (xhdpi, exact for the TV) plus 960x540 / 1280x720, smoothing on. Icon foreground 108 to 432 px (216 px at xhdpi, used 1:1 on the TV). b5 hi-res files removed. |
 | b5 | 1.3 | 2026-11-20 | `medusa-1.3-b5.apk` | Icon and TV banner shipped as single hi-res unscaled files (1152 px icon, 1280x720 banner in `drawable-nodpi`). Old low-res icon/banner files removed. Known issue: looks worse on the TV (launcher downscales them with a cheap filter); fix planned. |
