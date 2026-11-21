@@ -1,7 +1,7 @@
 {
-  "versionCode": 8,
+  "versionCode": 9,
   "versionName": "1.3",
-  "apkUrl": "https://raw.githubusercontent.com/MysticalMayfly/medusa/updates/medusa-1.3-b8.apk",
-  "sha256": "3d992e24b8d89bd6568e31a90fc6d4e615c98316c26998e559e80531b25376df",
-  "notes": "Speed: first release (R8) build with a baseline profile instead of a debug APK. Carousel zoom off, lighter focus animations, rows no longer fade in again on scroll. Focus fixes: Up from a screen lands on the open tab, Up next buttons, leaving the search field with the D-pad, the Settings button during an update check."
+  "apkUrl": "https://raw.githubusercontent.com/MysticalMayfly/medusa/updates/medusa-1.3-b9.apk",
+  "sha256": "83283adb97c7ac0f38ec8109506b023a31014a8867a2399ed4d18a77823cf13e",
+  "notes": "Smoother scrolling up and down Home and the other pages. The top carousel is painted once and reused while the page scrolls (it was painted 4 times per frame), and the background is no longer painted twice. Posters, progress bars and entering rows use fewer layers. A shelf's posters are built before it scrolls into view, not in the frame it appears. Medusa's own baseline profile is now in the APK (b8 only had the libraries' profiles)."
 }
