@@ -1,16 +1,20 @@
 # Medusa
 
-Android TV app by Priyabrat.
+Android TV app by Priyabrat. It updates itself: the installed app reads `latest.json` from this repo's
+`updates` branch, downloads the APK it names, and installs it over itself.
 
-## Updates
-The app reads `latest.json` from the `updates` branch and updates itself.
-To publish: follow `build.md` (Release steps) and `github.md`.
+## Docs
 
-## Docs (read before changing anything)
-- `changelog.md`: every published build, newest first (read before any change)
-- `features.md`: every feature considered, its status and build (check before shipping)
-- `rules.md`: the rules that keep the self-update loop alive, current state, version history
-- `updater.md`: how the updater works, the frozen `latest.json` contract, safe changes
-- `build.md`: building and testing in Android Studio, emulator update test, TV/adb
-- `github.md`: publishing to the `updates` branch, syncing `main`, secrets
-- `scripts/check_apk.py`: publish guard (must PASS) · `scripts/release.sh`: prepares dist/
+- `CLAUDE.md`: starting point for every Claude session (reading order, session behaviour)
+- `docs/RULES.md`: golden rules and frozen identifiers
+- `docs/updater.md`: how the updater works and the frozen `latest.json` format
+- `docs/release.md`: one checklist from code change to publish to syncing `main`
+- `docs/setup.md`: environment reference (Mac, toolchain, Android Studio, sandbox, GitHub, TV, adb)
+- `CHANGELOG.md`: one row per published build
+- `FEATURES.md`: one row per feature with its current status, plus ideas
+
+## Scripts
+
+- `scripts/release.sh`: prepares `dist/` (APK + `latest.json`) for a publish
+- `scripts/check_apk.py`: publish guard, must print PASS
+- `scripts/status.sh`: prints the current versions

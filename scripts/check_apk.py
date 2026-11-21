@@ -2,8 +2,8 @@
 """
 Medusa publish guard. Run on every APK before it goes to the `updates` branch.
 
-  python3 scripts/check_apk.py dist/medusa-1.3.apk            # checks + compares with GitHub
-  python3 scripts/check_apk.py dist/medusa-1.3.apk --offline  # skip the GitHub comparison
+  python3 scripts/check_apk.py dist/medusa-<versionName>-b<versionCode>.apk            # checks + compares with GitHub
+  python3 scripts/check_apk.py dist/medusa-<versionName>-b<versionCode>.apk --offline  # skip the GitHub comparison
 
 Exit code 0 = safe to publish. Anything else = DO NOT publish.
 Pure Python 3, no dependencies (works on the Mac and in a Linux sandbox).

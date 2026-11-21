@@ -19,3 +19,5 @@ release.jks
 *.jks
 keystore.properties
 /dist
+__pycache__/
+.idea/deviceHardwareInput.xml

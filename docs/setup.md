@@ -1,8 +1,14 @@
-# Medusa: Build & Test
+# Medusa: Setup
 
-Read `rules.md` first.
+Environment reference: the Mac, toolchain, Android Studio, sandbox, GitHub, TV and adb.
 
-## Toolchain (as of 2026-11-20)
+## Mac
+
+| Item | Value |
+|---|---|
+| Project on Mac | `/Users/mysticalmirage/AndroidStudioProjects/Medusa` |
+
+### Toolchain (as of 2026-11-20)
 
 | Item | Value |
 |---|---|
@@ -14,7 +20,13 @@ Read `rules.md` first.
 | Signing | `signingConfigs.medusa` from `keystore.properties`, applied to **both** debug and release |
 | Emulator | "Television (1080p)" AVD in Studio's Running Devices pane |
 
-## Where APKs come from
+### Gradle from a terminal (untested)
+
+`./gradlew` needs a JDK. Studio's bundled one: `export JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home"`. Not verified yet on this Mac.
+
+## Android Studio
+
+### Where APKs come from
 
 | Button / task | Output | Installable on TV? | Publish? |
 |---|---|---|---|
@@ -25,9 +37,9 @@ Read `rules.md` first.
 - Debug and release are signed with the same key, so switching from debug builds to release builds later is a normal update.
 - Run also installs onto the selected device. Assemble only builds.
 
-## Driving Android Studio (Claude, via computer use)
+### Driving Android Studio (Claude, via computer use)
 
-- Studio is granted at **click** tier: plain left-clicks on buttons only. No typing, no menus, no shortcuts, no right-click.
+- Studio is granted to Claude at **click** tier: plain left-clicks on buttons only. Toolbar buttons work (Sync, Run, Assemble); typing, menus, keyboard shortcuts and right-click do not.
 - Use `computer_app_screenshot` first, then click by `element_index`. Toolbar buttons (AX titles):
   - `Sync Project with Gradle Files`: after any change to `*.gradle.kts`, `libs.versions.toml`, `gradle.properties`
   - `Run 'app'`: build + install on the device selected in the toolbar (emulator)
@@ -39,55 +51,46 @@ Read `rules.md` first.
 - If Run shows "Application Installation Failed ... different signature" on the emulator: clicking OK uninstalls the emulator copy (emulator data only) and reinstalls. Never do this on the real TV without asking.
 - Studio picks up file edits from the bridge automatically. Gradle file edits need Sync.
 
-## The sandbox cannot build
+## Sandbox
 
-- `device_bash` runs in a Linux aarch64 VM with the project mounted at `$HOME/mnt/Medusa`. No Android SDK; Google's build tools are x86_64 only. Do not try to build there.
+### The sandbox cannot build
+
+- `device_bash` runs in a Linux aarch64 VM with the project mounted at `$HOME/mnt/Medusa`. No Android SDK; Google's build tools are x86_64 only. Do not try to build there. All builds happen in Android Studio on the Mac.
 - It has `python3` and `keytool`, enough for `scripts/check_apk.py` and key inspection.
 - It cannot reach the Mac's `localhost` (no access to Studio's adb server).
+- Its network cannot reach `raw.githubusercontent.com` (checked 2026-11-20). So `scripts/release.sh` runs `check_apk.py --offline` and `scripts/status.sh` prints "live: unreachable here"; the "higher than published" check runs in the publish step of `docs/release.md`.
 
-## Release steps (every update)
+## GitHub
 
-0. Read `changelog.md` and check `features.md` (status of what you are about to ship).
-1. Make the code change in the Mac folder.
-2. In `app/build.gradle.kts` set `versionCode = <published + 1>` and `versionName` only for a major update (Prince decides; otherwise keep it).
-3. Studio: **Sync** (if Gradle files changed), then **Assemble**. Wait for a new timestamp on `app/build/outputs/apk/debug/app-debug.apk`.
-4. `bash scripts/release.sh debug "what changed"` (from the project root, Mac or sandbox).
-   - Copies the APK to `dist/medusa-<versionName>-b<versionCode>.apk`, runs `check_apk.py`, writes `dist/latest.json` from the APK.
-   - Any FAIL = stop and fix. Never edit latest.json by hand to get around it.
-5. If the change touches anything in `rules.md` rule 13: run the **update-loop test** below.
-6. Publish both files (`github.md`).
-7. Push source to `main` (`github.md`).
-8. Update the "Current state" table and version history in `rules.md`, add the build to `changelog.md`, and update `features.md`.
+### Repo layout
 
-## Update-loop test (emulator)
+| | |
+|---|---|
+| Repo | See "Frozen identifiers" in `docs/RULES.md` (must stay public, rule 7) |
+| Clone URL used | `https://github.com/MysticalMayfly/medusa` (lowercase works) |
+| `main` | Source code. Mirror of the Mac project minus git-ignored files. |
+| `updates` | **Published update channel.** Only `latest.json` + the current APK (named per `docs/RULES.md` rule 4). Linear history, one commit per publish. |
+| Releases / tags | Not used (see constraints). |
 
-Goal: prove the **currently published** version can update to the **new** one.
+### Constraints in Claude sessions (learned 2026-11-20)
 
-1. Make sure the emulator runs the currently published version. If not, install it: build that version with Run, or install its APK.
-2. Bump the version and press **Assemble** (not Run: Run would install the new version directly and skip the test).
-3. `scripts/release.sh debug "..."` then publish to `updates` (`github.md`).
-4. Wait until the raw latest.json shows the new versionCode (up to ~5 min).
-5. In Studio's Running Devices pane, use the on-screen D-pad: focus "Check for updates", press the centre button (OK). Accept the install prompt if shown.
-6. Reopen Medusa: the version card must show the new version and build.
-7. Read Logcat (tag `MedusaUpdater`) if anything fails.
+- `gh repo create` from the sandbox: **blocked**. The repo was created by hand in the built-in browser (user signed in to GitHub there).
+- GitHub **Releases** API from the sandbox: **403 "not permitted for this session type"**. That is why the `updates` branch exists. Do not switch the channel to Releases.
+- Push access: call `add_repo` with owner `MysticalMayfly`, repo `Medusa`, access `push`. Then plain `git push` over HTTPS works from the sandbox.
+- The Mac project folder is **not** a git repo (git inside the bridged folder breaks on lock-file deletes). All git work happens in a sandbox clone.
+- Commit identity used: `MysticalMayfly <MysticalMayfly@users.noreply.github.com>`, plus the session's attribution trailer lines.
 
-If a change might break updating, publish a throwaway test version first (e.g. 1.3 test, then 1.4 real) rather than risk the TV.
+## TV
 
-## scripts/check_apk.py
+| Item | Value |
+|---|---|
+| TV | Smart_TV_Pro (G08_4K_GB), Android 14 / API 34. 4K panel, UI runs 1920x1080 @ 320 dpi (xhdpi). Google TV launcher. Mac adb is paired with it. |
+| LAN IP | Not stored (DHCP, may change). Ask the user when needed. |
 
-`python3 scripts/check_apk.py dist/medusa-X.apk [--offline]`
+### First install / logs (needs debugging ON, ask the user)
 
-Checks, from the APK itself: package = `com.priyabrat.medusa`, not `testOnly`, signer cert SHA-256 = the pinned key, versionCode present, and (online) versionCode higher than the live `latest.json`. Exit 0 = PASS. Also prints versionName, debuggable flag and the file SHA-256.
-
-## Gradle from a terminal (untested)
-
-`./gradlew` needs a JDK. Studio's bundled one: `export JAVA_HOME="/Applications/Android Studio.app/Contents/jbr/Contents/Home"`. Not verified yet on this Mac.
-
-## TV: first install / logs (needs debugging ON, ask the user)
-
-Updates never need this. Only for a fresh TV, a broken install, or reading logs.
-
-- TV: Developer options > Wireless debugging ON. The user turns it OFF afterwards (security).
+- The user turns TV debugging OFF when not in use (security). Updates never need debugging; only a fresh TV (first install), a broken install, or reading logs do.
+- To use it: TV Developer options > Wireless debugging ON. The user turns it OFF afterwards.
 - Sandbox adb: Ubuntu 22.04's adb (v28) cannot pair. A working adb 34 is built from Ubuntu noble packages with their own loader:
   ```bash
   D=$HOME/apt-noble; mkdir -p $D/lists/partial $D/cache/archives/partial $D/etc
@@ -100,6 +103,6 @@ Updates never need this. Only for a fresh TV, a broken install, or reading logs.
   # wrapper $R/adb runs: $R/root/usr/lib/aarch64-linux-gnu/ld-linux-aarch64.so.1 --library-path <all lib dirs under $R/root> $R/root/usr/lib/android-sdk/platform-tools/adb "$@"
   ```
 - The adb server cannot run as a detached daemon in the sandbox (blocked). In **each** call: `$A -a nodaemon server & SRV=$!; sleep 3; ...commands...; kill $SRV`. The server does not survive between calls, so `connect` again each call.
-- Pair once per sandbox: `adb pair <ip>:<pairing port> <6-digit code>` (from "Pair device with pairing code"). Connect: `adb connect <ip>:<port on the main Wireless debugging screen>`. Both ports change whenever debugging is toggled: ask the user for fresh ones.
+- Pair once per sandbox: `adb pair <ip>:<pairing port> <6-digit code>` (`<ip>` = the TV's LAN IP, ask the user) (from "Pair device with pairing code"). Connect: `adb connect <ip>:<port on the main Wireless debugging screen>`. Both ports change whenever debugging is toggled: ask the user for fresh ones.
 - First install: `adb push dist/medusa-X.apk /sdcard/Download/`, then the user installs it with the TV's File Manager (allow "Install unknown apps" for the File Manager). Or `adb install -r` if the user agrees.
 - Logs: `adb logcat -d | grep -E "MedusaUpdater|PackageInstaller|AndroidRuntime"` (add `timeout`, logcat can hang).

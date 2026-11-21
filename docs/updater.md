@@ -1,7 +1,7 @@
 # Medusa: Self-updater
 
 How the in-app updater works, and what must stay compatible so every installed version can
-still reach the next one. Read `rules.md` first.
+still reach the next one.
 
 ## Files
 
@@ -32,15 +32,17 @@ Logcat tag: **`MedusaUpdater`** (logs installed vs latest versionCode, failures,
 
 ## The `latest.json` contract (frozen)
 
-Location: branch `updates`, repo root, `https://raw.githubusercontent.com/MysticalMayfly/medusa/updates/latest.json`
+Location: branch `updates`, repo root. URL: "Update manifest" in `docs/RULES.md`, Frozen identifiers.
+
+Example only (made-up values, not the current state):
 
 ```json
 {
-  "versionCode": 3,
-  "versionName": "1.2",
-  "apkUrl": "https://raw.githubusercontent.com/MysticalMayfly/medusa/updates/medusa-1.2.apk",
+  "versionCode": 42,
+  "versionName": "9.9",
+  "apkUrl": "https://raw.githubusercontent.com/MysticalMayfly/medusa/updates/medusa-9.9-b42.apk",
   "sha256": "<64 lowercase hex chars of the APK file>",
-  "notes": "free text"
+  "notes": "plain text, from the Changes cell of the build's CHANGELOG.md row"
 }
 ```
 
@@ -48,9 +50,9 @@ Location: branch `updates`, repo root, `https://raw.githubusercontent.com/Mystic
 |---|---|---|---|
 | `versionCode` | integer | yes | Equals the APK's versionCode. Read with `getLong`. |
 | `versionName` | string | yes | Equals the APK's versionName. Shown on the button. |
-| `apkUrl` | string (https) | yes | Must already exist on the branch. Pattern: `.../updates/medusa-<versionName>-b<versionCode>.apk` (was `medusa-<versionName>.apk` up to 1.2; the app does not care about the name). |
+| `apkUrl` | string (https) | yes | Must already exist on the branch. Pattern: `.../updates/<APK name>`, named per `docs/RULES.md` rule 4 (up to b3 the name had no build number; the app does not care about the name). |
 | `sha256` | string | optional in code, **always set it** | SHA-256 of the exact APK file. |
-| `notes` | string | optional | Not shown yet. |
+| `notes` | string | optional | Not shown yet. `scripts/release.sh` fills it from the Changes cell of the build's `CHANGELOG.md` row. |
 
 - **Only ever add fields. Never rename, remove or change the type of these five.** Old installed versions parse this file with their own old code.
 - Valid JSON only (no comments, no trailing commas). `scripts/release.sh` generates it from the APK, so use that.
@@ -75,16 +77,10 @@ Location: branch `updates`, repo root, `https://raw.githubusercontent.com/Mystic
 
 ## Changing the updater safely
 
-- Any change to `update/*`, the manifest entries above, or `MainActivity`'s update wiring **must be tested on the emulator** with the full loop (`build.md`, "Update-loop test") before publishing.
+- See rule 13 in `docs/RULES.md` (emulator update-loop test before publishing).
 - The version that ships a new updater is still installed by the **old** updater. Only the version after it uses the new code. So both must work.
 - **Moving the update channel** (new host, new URL, private repo, server on a PC): 
   1. Ship a "bridge" version through the **current** channel whose `MANIFEST_URL` points to the new location.
   2. Confirm the TV runs the bridge version.
   3. Keep the old `latest.json` pointing at the bridge version for as long as any device might still be on an old build. Never delete the old channel early.
 - Private repo is not supported: the app has no token. Keep the repo public.
-
-## Not implemented yet (ideas, not requirements)
-
-- Automatic periodic checks (currently: on launch + button).
-- Showing `notes` on screen.
-- Auto-relaunch after update (Android does not allow it directly).
