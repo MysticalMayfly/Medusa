@@ -23,7 +23,7 @@ android {
         minSdk = 34
         targetSdk = 37
         // versionCode +1 on EVERY release (never reuse/lower). versionName only for a major update.
-        versionCode = 7
+        versionCode = 8
         versionName = "1.3"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
@@ -59,6 +59,11 @@ android {
         sourceCompatibility = JavaVersion.VERSION_11
         targetCompatibility = JavaVersion.VERSION_11
     }
+}
+
+// Speed: screen state in ui/model is immutable, so Compose can skip cards and rows that did not change.
+composeCompiler {
+    stabilityConfigurationFiles.add(project.layout.projectDirectory.file("compose-stability.conf"))
 }
 
 dependencies {

@@ -2,8 +2,11 @@
 # Prepares a Medusa update in dist/: medusa-<versionName>-b<versionCode>.apk + latest.json.
 # It does NOT publish. Publishing = commit both files to the `updates` branch (docs/release.md).
 #
-#   scripts/release.sh debug     # uses the APK from Studio's Assemble button (tested path)
-#   scripts/release.sh release   # builds assembleRelease with Gradle (R8; NOT yet tested on the TV)
+#   scripts/release.sh           # = release: the APK from Studio's Assemble with Build Variant "release"
+#   scripts/release.sh debug     # the debug APK from Assemble (old path, b2 to b7; slow on the TV)
+#
+# Publish release builds. A debug APK is debuggable and not optimized (no R8, no baseline profile):
+# Compose runs many times slower, which made b7 crawl on the TV.
 #
 # Before touching any APK it stops with an error unless:
 #   - the top row of CHANGELOG.md has Build = b<versionCode from app/build.gradle.kts>
@@ -14,7 +17,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 export PYTHONDONTWRITEBYTECODE=1   # no scripts/__pycache__ in the project folder
-MODE="${1:-debug}"
+MODE="${1:-release}"
 USAGE='usage: scripts/release.sh [debug|release]   (notes come from the top CHANGELOG.md row)'
 if [ $# -gt 1 ] || { [ "$MODE" != "debug" ] && [ "$MODE" != "release" ]; }; then
   echo "$USAGE"; exit 2
@@ -49,7 +52,7 @@ missing = sorted(cited - builds, key=lambda b: int(b[1:]))
 if missing:
     sys.exit("FEATURES.md cites builds missing from CHANGELOG.md: " + ", ".join(missing))
 notes = rows[0][4] if len(rows[0]) > 4 else ""
-notes = re.sub(r"\*\*|`", "", notes).replace("\\|", "|").strip()   # plain string, no markdown
+notes = re.sub(r"\*\*|\x60", "", notes).replace("\\|", "|").strip()   # plain string, no markdown (\x60 is a backtick: a literal one breaks macOS bash 3.2)
 if not notes:
     sys.exit("CHANGELOG.md: the Changes cell of b%s is empty" % code)
 print(notes)
@@ -57,8 +60,7 @@ PY
 )
 
 if [ "$MODE" = "release" ]; then
-  ./gradlew --quiet assembleRelease
-  SRC=app/build/outputs/apk/release/app-release.apk
+  SRC=app/build/outputs/apk/release/app-release.apk   # Studio: Build Variants = release, then Assemble
 else
   SRC=app/build/outputs/apk/debug/app-debug.apk   # from the Assemble button, NOT intermediates/ (Run output)
 fi

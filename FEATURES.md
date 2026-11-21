@@ -18,4 +18,4 @@ Status: **Shipped** (in a published build) Â· **Kept** (wanted, not built yet) Â
 | Automatic update checks on a timer + auto-install | Dropped | | Prince dropped it 2026-11-20. Checks stay on launch + button. |
 | Showing `notes` from latest.json on screen | Idea | | From the updater's "Not implemented yet" list. |
 | Auto-relaunch after update | Idea | | Android does not allow it directly. |
-| Release (R8) builds | Idea | | Untested on the TV; needs the emulator update-loop test first. |
+| Release (R8) builds | Shipped | b8 | Needed for speed: the debug APKs (b2 to b7) are debuggable and unoptimized, so Compose crawls on the TV. `scripts/release.sh` defaults to release. Emulator update-loop test b7 to b8 passed (2026-11-22). |

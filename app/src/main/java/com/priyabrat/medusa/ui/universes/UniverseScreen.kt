@@ -8,9 +8,8 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -73,13 +72,13 @@ fun UniverseScreen(state: UniverseUiState, actions: UniverseActions, header: @Co
                 Modifier
                     .padding(horizontal = Dimens.SafeH, vertical = Dimens.Gap8)
                     .fillMaxWidth()
-                    .height(220.dp)
+                    .heightIn(min = 220.dp)
                     .clip(Shapes.Hero)
                     .border(1.dp, MedusaColors.Line, Shapes.Hero)
                     .rise(),
             ) {
-                ArtPlaceholder(null, Modifier.fillMaxSize(), tint = Color(0xFF1A1A24))
-                Box(Modifier.fillMaxSize().background(Brush.horizontalGradient(0f to MedusaColors.Bg, 0.45f to MedusaColors.Bg.copy(alpha = 0.7f), 1f to Color.Transparent)))
+                ArtPlaceholder(null, Modifier.matchParentSize(), tint = Color(0xFF1A1A24))
+                Box(Modifier.matchParentSize().background(Brush.horizontalGradient(0f to MedusaColors.Bg, 0.45f to MedusaColors.Bg.copy(alpha = 0.7f), 1f to Color.Transparent)))
                 Column(Modifier.padding(Dimens.Gap22), verticalArrangement = Arrangement.spacedBy(Dimens.Gap8)) {
                     LinkPill("← " + stringResource(R.string.all_universes), actions.onBack)
                     Text(state.name, style = MedusaType.UniverseTitle)

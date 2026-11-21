@@ -17,9 +17,16 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.Text
@@ -51,6 +58,7 @@ fun SearchScreen(
             Column(Modifier.padding(horizontal = Dimens.SafeH, vertical = Dimens.Gap8), verticalArrangement = Arrangement.spacedBy(Dimens.Gap10)) {
                 val source = remember { MutableInteractionSource() }
                 val focused by source.collectIsFocusedAsState()
+                val focusManager = LocalFocusManager.current
                 Row(
                     Modifier
                         .width(420.dp)
@@ -72,7 +80,16 @@ fun SearchScreen(
                             textStyle = MedusaType.BodyStrong,
                             cursorBrush = SolidColor(MedusaColors.Fg),
                             interactionSource = source,
-                            modifier = Modifier.focusRequester(fieldFocus),
+                            // A text field keeps D-pad up/down for its cursor; pass them on so the remote can
+                            // leave the field for the header or the results.
+                            modifier = Modifier.focusRequester(fieldFocus).onPreviewKeyEvent {
+                                if (it.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+                                when (it.key) {
+                                    Key.DirectionDown -> focusManager.moveFocus(FocusDirection.Down)
+                                    Key.DirectionUp -> focusManager.moveFocus(FocusDirection.Up)
+                                    else -> false
+                                }
+                            },
                         )
                     }
                 }

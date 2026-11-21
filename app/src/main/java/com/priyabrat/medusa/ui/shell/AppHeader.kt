@@ -5,6 +5,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
@@ -19,7 +20,10 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
@@ -103,7 +107,16 @@ fun AppHeader(
                 .clip(Shapes.Pill)
                 .background(MedusaColors.Surface.copy(alpha = 0.72f))
                 .border(1.dp, MedusaColors.Line, Shapes.Pill)
-                .padding(3.dp),
+                .padding(3.dp)
+                // Up from a screen lands on the open tab, not on whichever tab sits nearest.
+                .focusProperties {
+                    onEnter = {
+                        if (requestedFocusDirection == FocusDirection.Up && current != null) {
+                            focus.tabs.getValue(current).requestFocus()
+                        }
+                    }
+                }
+                .focusGroup(),
             horizontalArrangement = Arrangement.spacedBy(3.dp),
         ) {
             Tab.entries.forEach { tab ->
@@ -120,7 +133,8 @@ fun AppHeader(
 private fun NavItem(label: String, selected: Boolean, onClick: () -> Unit, requester: FocusRequester) {
     val f = rememberFocusable()
     val focused = f.focused.value
-    val bg by animateColorAsState(
+    // Read only while drawing, so the tab's colour change redraws it without rebuilding the header.
+    val bg = animateColorAsState(
         when {
             selected -> MedusaColors.Fg
             focused -> MedusaColors.Raised
@@ -134,7 +148,7 @@ private fun NavItem(label: String, selected: Boolean, onClick: () -> Unit, reque
             .focusRing(focused, offset = 2.dp)
             .height(Dimens.NavItemH)
             .clip(Shapes.Pill)
-            .background(bg)
+            .drawBehind { drawRect(bg.value) }
             .tvClick(f, onClick = onClick)
             .padding(horizontal = 11.dp),
         contentAlignment = Alignment.Center,

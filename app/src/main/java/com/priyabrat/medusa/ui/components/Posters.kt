@@ -26,10 +26,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.focusRestorer
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -94,7 +94,13 @@ fun PosterCard(card: TitleCard, onOpen: (String) -> Unit, modifier: Modifier = M
                     scaleX = s; scaleY = s
                 }
                 .focusRing(focused, radius = 8.dp, width = 2.5.dp)
-                .shadow((14 * lift).dp, Shapes.Poster, clip = false),
+                // The shadow grows with the lift. Set here (layer phase), the animation only redraws;
+                // as .shadow((14 * lift).dp) it rebuilt the whole card on every frame of every focus move.
+                .graphicsLayer {
+                    shadowElevation = 14.dp.toPx() * lift
+                    shape = Shapes.Poster
+                    clip = false
+                },
         ) {
             ArtPlaceholder(
                 card.title,
@@ -102,7 +108,10 @@ fun PosterCard(card: TitleCard, onOpen: (String) -> Unit, modifier: Modifier = M
                     .fillMaxSize()
                     .clip(Shapes.Poster)
                     .border(1.dp, MedusaColors.Line, Shapes.Poster)
-                    .graphicsLayer { alpha = if (card.watched) 0.4f else 1f },
+                    .graphicsLayer {
+                        alpha = if (card.watched) 0.4f else 1f
+                        compositingStrategy = CompositingStrategy.ModulateAlpha
+                    },
             )
             if (card.badge != null) {
                 Text(

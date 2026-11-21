@@ -23,8 +23,10 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -74,6 +76,10 @@ private val heroTints = listOf(Color(0xFF1B1A26), Color(0xFF231719), Color(0xFF1
  * Left on Watch now goes to the previous pick, Right on Seen it to the next one.
  *
  * Trailers (stage 1 milestone 6) will play behind the pick here; [HeroPick.trailerId] is the hook.
+ *
+ * [zoom]: the slow backdrop zoom. Off while the backdrop is a flat placeholder: there it cannot be
+ * seen, yet it made the TV redraw most of the screen 60 times a second for as long as the carousel
+ * was open. Stage 2 turns it on for picks with real artwork.
  */
 @Composable
 fun HeroCarousel(
@@ -83,6 +89,7 @@ fun HeroCarousel(
     height: Dp = Dimens.HeroHeight,
     showPoster: Boolean = true,
     entry: FocusRequester? = null,
+    zoom: Boolean = false,
 ) {
     if (picks.isEmpty()) {
         Spacer(modifier.height(height))
@@ -103,19 +110,22 @@ fun HeroCarousel(
         }
     }
 
-    val zoom = rememberInfiniteTransition(label = "heroZoom")
-    val scale by zoom.animateFloat(
-        initialValue = 1.04f,
-        targetValue = 1.12f,
-        animationSpec = infiniteRepeatable(tween(Motion.HeroZoomMs), RepeatMode.Reverse),
-        label = "heroScale",
-    )
+    val scale: State<Float> = if (zoom) {
+        rememberInfiniteTransition(label = "heroZoom").animateFloat(
+            initialValue = 1.04f,
+            targetValue = 1.12f,
+            animationSpec = infiniteRepeatable(tween(Motion.HeroZoomMs), RepeatMode.Reverse),
+            label = "heroScale",
+        )
+    } else {
+        remember { mutableFloatStateOf(1f) }
+    }
 
     Box(modifier.fillMaxWidth().height(height).onFocusChanged { focusInside = it.hasFocus }) {
         Crossfade(targetState = i, animationSpec = tween(700), label = "heroArt") { n ->
             ArtPlaceholder(
                 null,
-                Modifier.fillMaxSize().graphicsLayer { scaleX = scale; scaleY = scale },
+                Modifier.fillMaxSize().graphicsLayer { scaleX = scale.value; scaleY = scale.value },
                 tint = heroTints[n % heroTints.size],
             )
         }
