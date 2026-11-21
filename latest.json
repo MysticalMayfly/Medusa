@@ -1,7 +1,7 @@
 {
-  "versionCode": 6,
+  "versionCode": 7,
   "versionName": "1.3",
-  "apkUrl": "https://raw.githubusercontent.com/MysticalMayfly/medusa/updates/medusa-1.3-b6.apk",
-  "sha256": "e5334071333314ddcc4505aa7ef4713c4e0320b5f96a3b2721906ab8d62cc34f",
-  "notes": "Icon and TV banner sized per density (xhdpi 640x360 matches the TV), lossless"
+  "apkUrl": "https://raw.githubusercontent.com/MysticalMayfly/medusa/updates/medusa-1.3-b7.apk",
+  "sha256": "6a53842a11340b2c123dfba971208db83c0690527e4def8af000fb2bca2f1a29",
+  "notes": "New Compose for TV screens (stage 1 template on placeholder data): header and tabs, Home, Movies, TV shows, Horror Standard, More, Universes, details panel, search and Settings. Check for updates moved to the Settings screen. Published without the emulator update-loop test at Prince's request."
 }
