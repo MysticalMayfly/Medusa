@@ -95,7 +95,8 @@ fun HomeScreen(state: HomeUiState, actions: HomeActions, header: @Composable () 
                 }
             }
         }
-        items(state.shelves, key = { it.id }) { shelf ->
+        // contentType lets a shelf scrolled off screen be reused for the next one instead of rebuilt.
+        items(state.shelves, key = { it.id }, contentType = { "shelf" }) { shelf ->
             ShelfRow(
                 shelf,
                 actions.onOpen,

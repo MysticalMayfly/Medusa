@@ -3,6 +3,7 @@ import java.util.Properties
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
+    alias(libs.plugins.androidx.baselineprofile)
 }
 
 // Release key (kept out of git). Same key signs debug + release so the TV can always update.
@@ -23,7 +24,7 @@ android {
         minSdk = 34
         targetSdk = 37
         // versionCode +1 on EVERY release (never reuse/lower). versionName only for a major update.
-        versionCode = 8
+        versionCode = 9
         versionName = "1.3"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
@@ -77,6 +78,10 @@ dependencies {
     implementation(libs.androidx.compose.ui.tooling.preview)
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.tv.material)
+    // Speed: installs the baseline profile (src/release/generated/baselineProfiles) so the TV runs
+    // Medusa's scrolling and focus code precompiled from the first launch instead of interpreted.
+    implementation(libs.androidx.profileinstaller)
+    baselineProfile(project(":baselineprofile"))
     debugImplementation(libs.androidx.compose.ui.tooling)
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.espresso.core)

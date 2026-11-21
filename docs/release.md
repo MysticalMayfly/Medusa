@@ -110,6 +110,19 @@ Goal: prove the **currently published** version can update to the **new** one.
 
 If a change might break updating, publish a throwaway test build first (one build as the test, the next build as the real one) rather than risk the TV.
 
+### Baseline profile
+
+`app/src/release/generated/baselineProfiles/` holds Medusa's baseline profile: the code that runs on start, while
+scrolling Home and on the other tabs. It ships inside the APK, so the TV runs that code precompiled from the first
+launch. The `:baselineprofile` module records it (it is not part of the APK). Regenerate it after big UI changes,
+with the Television_1080p emulator running:
+
+```bash
+./gradlew :app:generateReleaseBaselineProfile
+```
+
+The task writes the profile into `app/src/release/generated/baselineProfiles/`; keep the new files with the change.
+
 ### scripts/check_apk.py
 
 `python3 scripts/check_apk.py dist/<APK> [--offline]` (`release.sh` uses `--offline`)

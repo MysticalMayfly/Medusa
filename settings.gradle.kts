@@ -24,4 +24,6 @@ dependencyResolutionManagement {
 
 rootProject.name = "Medusa"
 include(":app")
+// Records the app's baseline profile (docs/release.md "Baseline profile"); not part of the APK
+include(":baselineprofile")
  

@@ -77,17 +77,16 @@ fun Modifier.focusRing(
  * Speed: lazy lists drop rows that scroll off screen and rebuild them when they come back. The saved
  * flag stops a returning row from fading in again, which would add drawing exactly while the TV scrolls.
  * The fade is applied to each draw call (ModulateAlpha) instead of through an offscreen copy of the
- * whole row, which is costly on the TV's GPU.
+ * whole row, which is costly on the TV's GPU. Once played, the row has no extra layer at all.
  */
 @Composable
 fun Modifier.rise(delayMs: Int = 0): Modifier {
     var played by rememberSaveable { mutableStateOf(false) }
-    val p = remember { Animatable(if (played) 1f else 0f) }
+    if (played) return this
+    val p = remember { Animatable(0f) }
     LaunchedEffect(Unit) {
-        if (!played) {
-            p.animateTo(1f, tween(Motion.RiseMs, delayMillis = delayMs, easing = Motion.Ease))
-            played = true
-        }
+        p.animateTo(1f, tween(Motion.RiseMs, delayMillis = delayMs, easing = Motion.Ease))
+        played = true
     }
     return graphicsLayer {
         alpha = p.value

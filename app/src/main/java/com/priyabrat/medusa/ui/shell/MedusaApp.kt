@@ -1,7 +1,6 @@
 package com.priyabrat.medusa.ui.shell
 
 import androidx.activity.compose.BackHandler
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
@@ -42,7 +41,6 @@ import com.priyabrat.medusa.ui.model.UniverseUiState
 import com.priyabrat.medusa.ui.model.UniversesUiState
 import com.priyabrat.medusa.ui.search.SearchScreen
 import com.priyabrat.medusa.ui.settings.SettingsScreen
-import com.priyabrat.medusa.ui.theme.MedusaColors
 import com.priyabrat.medusa.ui.universes.UniverseActions
 import com.priyabrat.medusa.ui.universes.UniverseScreen
 import com.priyabrat.medusa.ui.universes.UniversesScreen
@@ -103,7 +101,9 @@ fun MedusaApp(repo: MedusaRepository, settings: SettingsUiState, onUpdateButton:
     val hero = remember(repo) { HeroActions(onOpen = open, onInterested = repo::setInterested, onSeen = repo::setWatched) }
 
     CompositionLocalProvider(LocalToast provides toast::show) {
-        Box(Modifier.fillMaxSize().background(MedusaColors.Bg)) {
+        // No background here: the window background (themes.xml window_bg, the same colour) already
+        // paints it. Painting it twice cost the TV's GPU a full-screen fill on every frame.
+        Box(Modifier.fillMaxSize()) {
             when (val s = screen) {
                 is Screen.Top -> when (s.tab) {
                     Tab.Home -> {

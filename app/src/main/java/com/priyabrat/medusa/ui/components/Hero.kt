@@ -40,6 +40,7 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
@@ -122,25 +123,30 @@ fun HeroCarousel(
     }
 
     Box(modifier.fillMaxWidth().height(height).onFocusChanged { focusInside = it.hasFocus }) {
-        Crossfade(targetState = i, animationSpec = tween(700), label = "heroArt") { n ->
-            ArtPlaceholder(
-                null,
-                Modifier.fillMaxSize().graphicsLayer { scaleX = scale.value; scaleY = scale.value },
-                tint = heroTints[n % heroTints.size],
-            )
-        }
-        // .tn-art::after: fade to the page colour on the left and at the bottom
-        Box(
-            Modifier.fillMaxSize().background(
-                Brush.horizontalGradient(
-                    0f to MedusaColors.Bg,
-                    0.38f to MedusaColors.Bg.copy(alpha = 0.82f),
-                    0.75f to MedusaColors.Bg.copy(alpha = 0.2f),
-                    1f to Color.Transparent,
+        // Speed: the backdrop and its two fades are painted once into one cached layer (Offscreen), so
+        // while the page scrolls the TV's GPU copies one picture instead of filling the whole area
+        // three times every frame. The layer is repainted only while the art changes (crossfade, zoom).
+        Box(Modifier.fillMaxSize().graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }) {
+            Crossfade(targetState = i, animationSpec = tween(700), label = "heroArt") { n ->
+                ArtPlaceholder(
+                    null,
+                    Modifier.fillMaxSize().graphicsLayer { scaleX = scale.value; scaleY = scale.value },
+                    tint = heroTints[n % heroTints.size],
+                )
+            }
+            // .tn-art::after: fade to the page colour on the left and at the bottom
+            Box(
+                Modifier.fillMaxSize().background(
+                    Brush.horizontalGradient(
+                        0f to MedusaColors.Bg,
+                        0.38f to MedusaColors.Bg.copy(alpha = 0.82f),
+                        0.75f to MedusaColors.Bg.copy(alpha = 0.2f),
+                        1f to Color.Transparent,
+                    ),
                 ),
-            ),
-        )
-        Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0.55f to Color.Transparent, 1f to MedusaColors.Bg)))
+            )
+            Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0.55f to Color.Transparent, 1f to MedusaColors.Bg)))
+        }
 
         Row(
             Modifier
