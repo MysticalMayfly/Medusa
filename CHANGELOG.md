@@ -8,6 +8,7 @@ If that build is then not published, remove its row.
 
 | Build | Version | Date | APK | Changes |
 |---|---|---|---|---|
+| b20 | 1.3 | 2026-11-27 | `medusa-1.3-b20.apk` | Add account uses phone sign-in with a QR code. Continue as guest keeps viewing on this TV. Profile labels are simplified and the retired Preetam profile is removed. |
 | b19 | 1.3 | 2026-11-27 | `medusa-1.3-b19.apk` | New loading screen lines: "Waking the serpents" first, then 52 new curse and horror lines in random order. |
 | b18 | 1.3 | 2026-11-27 | `medusa-1.3-b18.apk` | Add profiles with Google sign-in and sign out from a profile on this TV. Existing linked profile history is retained. |
 | b17 | 1.3 | 2026-11-27 | `medusa-1.3-b17.apk` | Loading messages fade out and in as one continuous sequence, preventing the previous line from flashing back between messages. |
