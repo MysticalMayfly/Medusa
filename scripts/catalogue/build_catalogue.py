@@ -251,7 +251,9 @@ def build():
         watch = json.loads(r['provider_links']) if (r.get('provider_links') or '').startswith('[') else []
         prov = ((tm.get('watch/providers') or {}).get('results') or {}).get('IN') or {}
         genres = [g['name'] for g in tm.get('genres') or []]
-        horror = 'Horror' in genres or num(r.get('horror_sources'), int) and int(r['horror_sources']) >= 1
+        # Horror when TMDB says so, or when at least 3 of the 5 horror lists include it (1 list let in thrillers like
+        # The Girl with the Dragon Tattoo).
+        horror = 'Horror' in genres or (num(r.get('horror_sources'), int) or 0) >= 3
         seasons = [s.get('episode_count') or 0 for s in sorted(tm.get('seasons') or [], key=lambda s: s.get('season_number') or 0)
                    if (s.get('season_number') or 0) > 0]
         networks = [n['name'] for n in tm.get('networks') or []]

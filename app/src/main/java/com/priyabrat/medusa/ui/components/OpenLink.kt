@@ -21,6 +21,20 @@ fun rememberOpenLink(): (String?) -> Unit {
         { url ->
             if (url.isNullOrBlank()) {
                 toast(context.getString(R.string.link_missing))
+            } else if (url.startsWith("app:")) {
+                // A service's own TV app (no deep link for the title): open its home screen, or its store page.
+                val pkg = url.removePrefix("app:")
+                // Started by package rather than looked up first: Android hides other apps from lookups unless the
+                // manifest lists them, but starting one this way still works.
+                val tries = listOf(
+                    Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LEANBACK_LAUNCHER).setPackage(pkg),
+                    Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER).setPackage(pkg),
+                    Intent(Intent.ACTION_VIEW, Uri.parse("market://details?id=$pkg")),
+                )
+                val opened = tries.any { i ->
+                    try { context.startActivity(i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)); true } catch (e: ActivityNotFoundException) { false }
+                }
+                if (!opened) toast(context.getString(R.string.link_no_app))
             } else {
                 try {
                     context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))

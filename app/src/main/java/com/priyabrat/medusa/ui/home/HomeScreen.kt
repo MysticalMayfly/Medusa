@@ -1,5 +1,11 @@
 package com.priyabrat.medusa.ui.home
 
+import com.priyabrat.medusa.ui.components.rememberFocusable
+
+import com.priyabrat.medusa.ui.components.tvClick
+
+import com.priyabrat.medusa.ui.components.focusRing
+
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
@@ -63,6 +69,8 @@ class HomeActions(
     val onOpen: (String) -> Unit,
     val onTickEpisode: (String) -> Unit,
     val onSeeAll: (String) -> Unit,
+    /** A service tile in the progress section: opens that service's titles. */
+    val onPlatform: (String) -> Unit = {},
 )
 
 /**
@@ -70,9 +78,16 @@ class HomeActions(
  * then the watch-progress section (ring plus a floating tile and a bar per platform).
  */
 @Composable
-fun HomeScreen(state: HomeUiState, actions: HomeActions, header: @Composable () -> Unit, heroEntry: FocusRequester? = null) {
+fun HomeScreen(
+    state: HomeUiState,
+    actions: HomeActions,
+    header: @Composable () -> Unit,
+    heroEntry: FocusRequester? = null,
+    listState: androidx.compose.foundation.lazy.LazyListState = androidx.compose.foundation.lazy.rememberLazyListState(),
+) {
     LazyColumn(
         Modifier.fillMaxWidth(),
+        state = listState,
         contentPadding = PaddingValues(bottom = Dimens.SafeBottom),
         verticalArrangement = Arrangement.spacedBy(SectionGap),
     ) {
@@ -104,13 +119,13 @@ fun HomeScreen(state: HomeUiState, actions: HomeActions, header: @Composable () 
                 onSeeAll = if (shelf.seeAllLabel != null) ({ actions.onSeeAll(shelf.id) }) else null,
             )
         }
-        state.progress?.let { p -> item("progress") { ProgressSection(p, Modifier.rise()) } }
+        state.progress?.let { p -> item("progress") { ProgressSection(p, actions.onPlatform, Modifier.rise()) } }
     }
 }
 
 /** .prog-row: "18 watched of 1635 titles", the ring, and the platform box. */
 @Composable
-private fun ProgressSection(p: ProgressSummary, modifier: Modifier = Modifier) {
+private fun ProgressSection(p: ProgressSummary, onPlatform: (String) -> Unit, modifier: Modifier = Modifier) {
     Row(
         modifier.fillMaxWidth().padding(horizontal = Dimens.SafeH),
         horizontalArrangement = Arrangement.spacedBy(Dimens.Gap16),
@@ -151,10 +166,10 @@ private fun ProgressSection(p: ProgressSummary, modifier: Modifier = Modifier) {
             verticalArrangement = Arrangement.spacedBy(Dimens.Gap14),
         ) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceAround) {
-                p.platforms.take(4).forEachIndexed { n, it -> PlatformTile(it, n) }
+                p.platforms.take(4).forEach { PlatformTile(it, onPlatform) }
             }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceAround) {
-                p.platforms.drop(4).forEachIndexed { n, it -> PlatformTile(it, n + 4) }
+                p.platforms.drop(4).forEach { PlatformTile(it, onPlatform) }
             }
             Column(verticalArrangement = Arrangement.spacedBy(Dimens.Gap8)) {
                 p.platforms.forEach { PlatformBar(it) }
@@ -185,27 +200,26 @@ private fun Ring(percent: Int) {
     }
 }
 
-/** .tile: a platform's floating tile with its glow; it bobs gently (6 s). */
+/**
+ * .tile: a service's tile. On the TV it is still and upright (the Mac's floating, tilted tiles were hard to read and
+ * kept the GPU busy), it can take focus so the remote can reach the bottom of Home, and OK opens that service.
+ * The logo sits on a dark chip: on the service's own colour, Apple's white logo and others disappeared.
+ */
 @Composable
-private fun PlatformTile(p: PlatformProgress, n: Int) {
-    val bob = rememberInfiniteTransition(label = "bob")
-    val t by bob.animateFloat(0f, 1f, infiniteRepeatable(tween(Motion.BobMs / 2, delayMillis = 0), RepeatMode.Reverse, initialStartOffset = androidx.compose.animation.core.StartOffset(n * 400)), label = "bobT")
-    val tilt = if (n % 2 == 0) 3f else -3f
+private fun PlatformTile(p: PlatformProgress, onPlatform: (String) -> Unit) {
+    val f = rememberFocusable()
     Column(
         Modifier
-            .graphicsLayer {
-                translationY = -8.dp.toPx() * t
-                rotationZ = tilt * (1f - 2f * t)
-            }
-            .shadow(14.dp, RoundedCornerShape(15.dp), ambientColor = Color(p.argb), spotColor = Color(p.argb))
             .size(58.dp)
+            .focusRing(f.focused.value, radius = 15.dp)
             .clip(RoundedCornerShape(15.dp))
             .background(MedusaColors.Raised)
-            .border(1.dp, MedusaColors.Line2, RoundedCornerShape(15.dp)),
+            .border(1.dp, Color(p.argb).copy(alpha = 0.6f), RoundedCornerShape(15.dp))
+            .tvClick(f) { onPlatform(p.id) },
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
-        Monogram(p.monogram, p.argb, 22.dp)
+        Monogram(p.monogram, null, 22.dp)
         Text("${p.watched} / ${p.total}", style = MedusaType.Mono.copy(fontSize = 9.sp), modifier = Modifier.padding(top = 4.dp))
     }
 }

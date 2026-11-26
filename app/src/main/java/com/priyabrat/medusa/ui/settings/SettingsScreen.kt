@@ -59,7 +59,7 @@ fun SettingsScreen(state: SettingsUiState, onUpdateButton: () -> Unit, onImportB
                     Pill(
                         state.buttonLabel,
                         onClick = onUpdateButton,
-                        modifier = Modifier.padding(top = Dimens.Gap8).focusRequester(buttonFocus),
+                        modifier = Modifier.padding(top = Dimens.Gap8),
                         style = PillStyle.Primary,
                         enabled = state.buttonEnabled,
                         height = 32.dp,
@@ -83,7 +83,8 @@ fun SettingsScreen(state: SettingsUiState, onUpdateButton: () -> Unit, onImportB
                     Pill(
                         state.importLabel,
                         onClick = onImportButton,
-                        modifier = Modifier.padding(top = Dimens.Gap8),
+                        // Settings opens here, not on the update button: a stray OK there installed an update.
+                        modifier = Modifier.padding(top = Dimens.Gap8).focusRequester(buttonFocus),
                         enabled = state.importEnabled,
                         height = 32.dp,
                         textStyle = MedusaType.ControlStrong,

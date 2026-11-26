@@ -104,7 +104,8 @@ private fun UniverseTileCard(tile: UniverseTile, onOpen: (String) -> Unit, modif
                 .height(78.dp)
                 .background(Brush.verticalGradient(listOf(tint.copy(alpha = 0.35f), MedusaColors.Surface))),
         ) {
-            listOf(-14f, 0f, 14f).forEachIndexed { n, angle ->
+            // Only real posters: a universe with two films shows two, not a blank third card.
+            listOf(-14f, 0f, 14f).take(tile.posterUrls.size.coerceIn(1, 3)).forEachIndexed { n, angle ->
                 ArtPlaceholder(
                     null,
                     Modifier

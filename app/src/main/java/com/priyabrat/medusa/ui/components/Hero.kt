@@ -1,5 +1,15 @@
 package com.priyabrat.medusa.ui.components
 
+import kotlinx.coroutines.launch
+
+import androidx.compose.ui.focus.focusProperties
+
+import androidx.compose.foundation.focusGroup
+
+import androidx.compose.foundation.border
+
+import androidx.compose.foundation.relocation.bringIntoViewRequester
+
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -104,7 +114,18 @@ fun HeroCarousel(
     var chooserOpen by remember { mutableStateOf(false) }
     val i = index.coerceIn(0, picks.lastIndex)
     val pick = picks[i]
-    fun step(by: Int) { index = (i + by + picks.size) % picks.size }
+    // From the current index state, not the value captured at the last draw: quick presses each count.
+    fun step(by: Int) { index = (index.coerceIn(0, picks.lastIndex) + by + picks.size) % picks.size }
+    val mainButton = entry ?: remember { FocusRequester() }
+    val bringHero = remember { androidx.compose.foundation.relocation.BringIntoViewRequester() }
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+
+    // Load every pick's backdrop ahead, so a new slide's picture is there with its text (it used to arrive late).
+    val context = androidx.compose.ui.platform.LocalContext.current
+    LaunchedEffect(picks) {
+        val loader = coil3.SingletonImageLoader.get(context)
+        picks.mapNotNull { it.backdropUrl }.forEach { loader.enqueue(coil3.request.ImageRequest.Builder(context).data(it).build()) }
+    }
 
     // The playlist (tonight.js): a pick without a trailer stays 8 s; one with a trailer plays it, fades out before
     // the end, and the next pick comes AFTER_TRAILER later. A trailer that never starts falls back to the still.
@@ -112,6 +133,11 @@ fun HeroCarousel(
     var onScreen by remember { mutableStateOf(true) }
     val paused = covered || !onScreen
     var trailer by remember(i) { mutableIntStateOf(TRAILER_PLAYING) }
+    // Once the trailer is really playing, the still picture and the poster fade away behind it.
+    var trailerShown by remember(i) { mutableStateOf(false) }
+    val stillAlpha by androidx.compose.animation.core.animateFloatAsState(
+        if (trailerShown) 0f else 1f, tween(TrailerTiming.FADE_MS), label = "heroStill",
+    )
     val trailerId = pick.trailerId?.takeIf { trailer != TRAILER_FAILED }
     LaunchedEffect(i, focusInside, chooserOpen, picks.size, trailer, trailerId, paused) {
         if (picks.size <= 1 || focusInside || chooserOpen || paused) return@LaunchedEffect
@@ -136,7 +162,13 @@ fun HeroCarousel(
         modifier
             .fillMaxWidth()
             .height(height)
-            .onFocusChanged { focusInside = it.hasFocus }
+            .onFocusChanged {
+                // Whenever focus is in the carousel, show all of it: the title stays on screen with the buttons.
+                if (it.hasFocus && !focusInside) scope.launch { bringHero.bringIntoView() }
+                focusInside = it.hasFocus
+            }
+            .bringIntoViewRequester(bringHero)
+
             // Away: once the page scrolls down to the rows, the trailer pauses (the Mac waited until 45 % was out of
             // view; the TV pauses sooner, because a playing video behind scrolling rows made every frame slow on it).
             .onGloballyPositioned { c ->
@@ -147,7 +179,7 @@ fun HeroCarousel(
         // Speed: the backdrop and its two fades are painted once into one cached layer (Offscreen), so
         // while the page scrolls the TV's GPU copies one picture instead of filling the whole area
         // three times every frame. The layer is repainted only while the art changes (crossfade, zoom).
-        Box(Modifier.fillMaxSize().graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }) {
+        Box(Modifier.fillMaxSize().graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen; alpha = stillAlpha }) {
             Crossfade(targetState = i, animationSpec = tween(700), label = "heroArt") { n ->
                 ArtPlaceholder(
                     null,
@@ -166,6 +198,7 @@ fun HeroCarousel(
                     dipped = chooserOpen,
                     onEnded = { trailer = TRAILER_ENDED },
                     onFailed = { trailer = TRAILER_FAILED },
+                    onShown = { trailerShown = it },
                 )
             }
         }
@@ -194,15 +227,24 @@ fun HeroCarousel(
             verticalAlignment = Alignment.Bottom,
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
-            key(pick.id) {
-                Column(Modifier.widthIn(max = Dimens.HeroInfoMaxW).rise(), verticalArrangement = Arrangement.spacedBy(Dimens.Gap8)) {
-                    Text(pick.eyebrow.uppercase(), style = MedusaType.Eyebrow)
-                    Text(pick.title, style = MedusaType.HeroTitle, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Dimens.Gap10)) {
-                        Text("${pick.year}  ·  ${pick.runtime}", style = MedusaType.MonoStrong)
-                        pick.ratings.forEach { RatingBadge(it) }
+            Column(Modifier.widthIn(max = Dimens.HeroInfoMaxW), verticalArrangement = Arrangement.spacedBy(Dimens.Gap8)) {
+                key(pick.id) {
+                    // Only the text is rebuilt per slide; the buttons below stay, so focus stays on them while paging.
+                    Column(Modifier.rise(), verticalArrangement = Arrangement.spacedBy(Dimens.Gap8)) {
+                        if (pick.eyebrow.isNotEmpty()) Text(pick.eyebrow.uppercase(), style = MedusaType.Eyebrow, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        // A long title gets a smaller size instead of pushing the lines above it into the top menu.
+                        Text(
+                            pick.title,
+                            style = if (pick.title.length > 22) MedusaType.HeroTitle.copy(fontSize = MedusaType.HeroTitle.fontSize * 0.72f, lineHeight = MedusaType.HeroTitle.lineHeight * 0.72f) else MedusaType.HeroTitle,
+                            maxLines = 2, overflow = TextOverflow.Ellipsis,
+                        )
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Dimens.Gap10)) {
+                            Text("${pick.year}  ·  ${pick.runtime}", style = MedusaType.MonoStrong)
+                            pick.ratings.forEach { RatingBadge(it) }
+                        }
+                        Text(pick.overview, style = MedusaType.Body, maxLines = 3, overflow = TextOverflow.Ellipsis)
                     }
-                    Text(pick.overview, style = MedusaType.Body, maxLines = 3, overflow = TextOverflow.Ellipsis)
+                }
                     Row(
                         Modifier.padding(top = Dimens.Gap8),
                         verticalAlignment = Alignment.CenterVertically,
@@ -216,8 +258,11 @@ fun HeroCarousel(
                                 if (pick.watchOptions.size > 1) chooserOpen = true else openLink(pick.watchOptions.firstOrNull()?.url)
                             },
                             modifier = Modifier
-                                .then(if (entry != null) Modifier.focusRequester(entry) else Modifier)
-
+                                .focusRequester(mainButton)
+                                // Left on the main button: previous pick (the ‹ arrow).
+                                .onKeyEvent { e ->
+                                    if (e.type == KeyEventType.KeyDown && e.key == Key.DirectionLeft && picks.size > 1) { step(-1); true } else false
+                                },
                         )
                         GlassRound(
                             if (pick.interested) MedusaIcons.HeartFilled else MedusaIcons.Heart,
@@ -230,7 +275,10 @@ fun HeroCarousel(
                             MedusaIcons.Check,
                             onClick = { actions.onSeen(pick.id, !pick.seen) },
                             on = pick.seen,
-
+                            // Right on the last button: next pick (the › arrow).
+                            modifier = Modifier.onKeyEvent { e ->
+                                if (e.type == KeyEventType.KeyDown && e.key == Key.DirectionRight && picks.size > 1) { step(1); true } else false
+                            },
                         )
                     }
                     if (picks.size > 1) {
@@ -246,7 +294,6 @@ fun HeroCarousel(
                         }
                     }
                 }
-            }
             if (showPoster) {
                 key(pick.id) {
                     ArtPlaceholder(
@@ -254,6 +301,7 @@ fun HeroCarousel(
                         url = pick.posterUrl,
                         modifier = Modifier
                             .rise()
+                            .graphicsLayer { alpha = stillAlpha }
                             .width(Dimens.HeroPosterW)
                             .aspectRatio(4f / 5f)
                             .clip(RoundedCornerShape(11.dp)),
@@ -262,9 +310,11 @@ fun HeroCarousel(
             }
         }
         // The Mac's ‹ › arrows (.tn-nav): previous and next pick, reached with left and right from the buttons.
+        // They are signs, not stops: left on the main button and right on the last button page the carousel, so the
+        // remote never lands on them (they used to catch focus and jump to each other). Inside the TV's safe margin.
         if (picks.size > 1) {
-            IconCircle(MedusaIcons.ChevronLeft, { step(-1) }, Modifier.align(Alignment.CenterStart).padding(start = 8.dp), size = 32.dp)
-            IconCircle(MedusaIcons.ChevronRight, { step(1) }, Modifier.align(Alignment.CenterEnd).padding(end = 8.dp), size = 32.dp)
+            HeroArrow(MedusaIcons.ChevronLeft, Modifier.align(Alignment.CenterStart).padding(start = 14.dp))
+            HeroArrow(MedusaIcons.ChevronRight, Modifier.align(Alignment.CenterEnd).padding(end = 14.dp))
         }
     }
 
@@ -281,3 +331,13 @@ fun HeroCarousel(
 private const val TRAILER_PLAYING = 0
 private const val TRAILER_ENDED = 1
 private const val TRAILER_FAILED = 2
+
+/** The carousel's ‹ › signs: drawn like the round buttons, but never focusable. */
+@Composable
+private fun HeroArrow(icon: androidx.compose.ui.graphics.vector.ImageVector, modifier: Modifier) {
+    Box(
+        modifier.size(30.dp).clip(androidx.compose.foundation.shape.CircleShape).background(MedusaColors.Bg.copy(alpha = 0.45f))
+            .border(1.dp, MedusaColors.Line2, androidx.compose.foundation.shape.CircleShape),
+        contentAlignment = Alignment.Center,
+    ) { Icon(icon, MedusaColors.Fg.copy(alpha = 0.8f), 14.dp) }
+}

@@ -93,7 +93,8 @@ fun DetailPanel(detail: TitleDetail?, actions: DetailActions, onClose: () -> Uni
                     Box(Modifier.fillMaxWidth().height(Dimens.PanelArtH)) {
                         ArtPlaceholder(null, Modifier.fillMaxSize(), tint = Color(0xFF1C2230), url = detail?.backdropUrl)
                         Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0.2f to Color.Transparent, 0.98f to MedusaColors.Panel)))
-                        IconCircle(MedusaIcons.Close, onClose, Modifier.align(Alignment.TopEnd).padding(12.dp), size = 26.dp)
+                        // Focus starts here, not on Watched: one stray OK used to mark the title watched.
+                        IconCircle(MedusaIcons.Close, onClose, Modifier.align(Alignment.TopEnd).padding(12.dp).focusRequester(first), size = 26.dp)
                     }
                     if (detail != null) Column(
                         Modifier.padding(horizontal = Dimens.Gap22).offset(y = (-56).dp),
@@ -115,7 +116,6 @@ fun DetailPanel(detail: TitleDetail?, actions: DetailActions, onClose: () -> Uni
                             Pill(
                                 stringResource(R.string.watched),
                                 { actions.onWatched(detail.id, !detail.watched) },
-                                Modifier.focusRequester(first),
                                 selected = detail.watched,
                                 icon = MedusaIcons.Check,
                             )
@@ -154,9 +154,7 @@ fun DetailPanel(detail: TitleDetail?, actions: DetailActions, onClose: () -> Uni
                             }
                         }
                         // .links
-                        FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                            detail.links.forEach { link -> LinkPill("${link.label} ↗", { openLink(link.url) }) }
-                        }
+                        // No web links: the TV has no browser, so TMDB and IMDb pages could not open.
                     }
                 }
             }

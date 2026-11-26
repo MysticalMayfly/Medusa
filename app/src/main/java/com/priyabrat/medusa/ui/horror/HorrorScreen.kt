@@ -39,11 +39,11 @@ class HorrorActions(
  * The Mac's four "Classic looks" are not on the TV.
  */
 @Composable
-fun HorrorScreen(state: HorrorUiState, actions: HorrorActions, header: @Composable () -> Unit) {
+fun HorrorScreen(state: HorrorUiState, actions: HorrorActions, header: @Composable () -> Unit, heroEntry: androidx.compose.ui.focus.FocusRequester? = null) {
     PageGrid {
         fullWidth("top") {
             Box {
-                HeroCarousel(state.picks.ifEmpty { listOfNotNull(state.pick) }, actions.hero, height = Dimens.PageHeroHeight)
+                HeroCarousel(state.picks.ifEmpty { listOfNotNull(state.pick) }, actions.hero, height = Dimens.PageHeroHeight, entry = heroEntry)
                 header()
             }
         }

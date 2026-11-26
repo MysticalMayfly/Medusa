@@ -52,6 +52,7 @@ import com.priyabrat.medusa.ui.universes.UniverseActions
 import com.priyabrat.medusa.ui.universes.UniverseScreen
 import com.priyabrat.medusa.ui.universes.UniversesScreen
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 /** Where the app is. Tabs are top level; a universe, Search and Settings sit one level below. */
 sealed interface Screen {
@@ -85,16 +86,38 @@ fun MedusaApp(
     val headerFocus = remember { HeaderFocus() }
     val settingsButton = remember { FocusRequester() }
     val searchField = remember { FocusRequester() }
+    // The carousel's main button: where Down from the top menu goes on pages that have a carousel.
+    val heroEntry = remember { FocusRequester() }
     val profiles by remember(repo) { repo.profiles() }.collectAsState(ProfilesUiState())
     var editing by remember { mutableStateOf<String?>(null) }    // profile id, or NEW_PROFILE
-    var askedWho by remember { mutableStateOf(false) }
 
     fun go(to: Screen) {
         if (to is Screen.Top) { stack.clear(); stack.add(to) } else if (stack.last() != to) stack.add(to)
     }
 
-    BackHandler(enabled = stack.size > 1 || screen != Screen.Top(Tab.Home)) {
-        if (stack.size > 1) stack.removeAt(stack.lastIndex) else go(Screen.Top(Tab.Home))
+    // Back: closes a level, then returns to Home. On Home it first goes back to the top (the Home tab), and only a
+    // second Back within a few seconds leaves; leaving sends Medusa to the background instead of closing it, so
+    // coming back finds it where it was (no intro, no Who's watching, same page).
+    val activity = androidx.activity.compose.LocalActivity.current
+    val homeList = androidx.compose.foundation.lazy.rememberLazyListState()
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    var exitArmedAt by remember { mutableStateOf(0L) }
+    val exitHint = androidx.compose.ui.res.stringResource(com.priyabrat.medusa.R.string.back_again_to_exit)
+    BackHandler(enabled = true) {
+        when {
+            stack.size > 1 -> stack.removeAt(stack.lastIndex)
+            screen != Screen.Top(Tab.Home) -> go(Screen.Top(Tab.Home))
+            System.currentTimeMillis() - exitArmedAt < EXIT_WINDOW_MS -> { exitArmedAt = 0L; activity?.moveTaskToBack(true) }
+            else -> {
+                exitArmedAt = System.currentTimeMillis()
+                // Back to the top of Home first, with focus on the Home tab.
+                scope.launch {
+                    homeList.scrollToItem(0)
+                    headerFocus.tabs.getValue(Tab.Home).requestWhenReady()
+                }
+                toast.show(exitHint)
+            }
+        }
     }
 
     val currentTab: Tab? = when (val s = screen) {
@@ -111,6 +134,7 @@ fun MedusaApp(
             updateWaiting = settings.updateWaiting,
             focus = headerFocus,
             profile = profiles.current,
+            down = heroEntry.takeIf { screen is Screen.Top && screen.tab != Tab.More && screen.tab != Tab.Universes },
             onProfile = { profiles.current?.let { go(Screen.Profile(it.id)) } },
         )
     }
@@ -133,9 +157,13 @@ fun MedusaApp(
                             HomeActions(hero, open, repo::markEpisodeWatched, onSeeAll = {
                                 repo.selectFilter(FilterKeys.HORROR, FilterKeys.GROUP_SEE_ALL, it)
                                 go(Screen.Top(Tab.Horror))
+                            }, onPlatform = { slug ->
+                                // Premiere platforms are for shows (networks), so a tile opens TV shows on that service.
+                                repo.selectFilter(FilterKeys.browse(BrowseKind.Shows), FilterKeys.GROUP_PLATFORM, slug)
+                                go(Screen.Top(Tab.Shows))
                             })
                         }
-                        HomeScreen(state, actions, header)
+                        HomeScreen(state, actions, header, heroEntry = heroEntry, listState = homeList)
                     }
                     Tab.Movies, Tab.Shows, Tab.More -> {
                         val kind = when (s.tab) { Tab.Movies -> BrowseKind.Movies; Tab.Shows -> BrowseKind.Shows; else -> BrowseKind.More }
@@ -151,7 +179,7 @@ fun MedusaApp(
                                 onToggleUnwatched = { repo.toggleFilter(key, FilterKeys.FLAG_UNWATCHED) },
                             )
                         }
-                        BrowseScreen(state, actions, header)
+                        BrowseScreen(state, actions, header, heroEntry.takeIf { kind != BrowseKind.More })
                     }
                     Tab.Horror -> {
                         val state by remember { repo.horror() }.collectAsState(HorrorUiState())
@@ -167,7 +195,7 @@ fun MedusaApp(
                                 onSeeAll = { repo.selectFilter(h, FilterKeys.GROUP_SEE_ALL, it) },
                             )
                         }
-                        HorrorScreen(state, actions, header)
+                        HorrorScreen(state, actions, header, heroEntry)
                     }
                     Tab.Universes -> {
                         val state by remember { repo.universes() }.collectAsState(UniversesUiState())
@@ -190,7 +218,9 @@ fun MedusaApp(
                 }
                 Screen.Search -> {
                     val state by remember(query) { repo.search(query) }.collectAsState(SearchUiState(query))
-                    SearchScreen(state, onQuery = { query = it }, onOpen = open, header = header, fieldFocus = searchField)
+                    // The field shows what was typed, not the last search result's query: results arrive a moment later,
+                    // and writing the older query back into the field threw away every letter after the first.
+                    SearchScreen(state.copy(query = query), onQuery = { query = it }, onOpen = open, header = header, fieldFocus = searchField)
                 }
                 Screen.Settings -> SettingsScreen(settings, onUpdateButton, onImportButton, header, settingsButton)
                 Screen.Profiles -> WhoIsWatchingScreen(
@@ -224,6 +254,7 @@ fun MedusaApp(
                 onSave = { name, avatar -> repo.saveProfile(start?.id, name, avatar); editing = null },
                 onDelete = { repo.deleteProfile(id); editing = null; go(Screen.Profiles) },
                 onDismiss = { editing = null },
+                onGoogleSignOut = start?.photoUrl?.let { { onGoogleSignOut(id); editing = null } },
             )
         }
 
@@ -239,7 +270,7 @@ fun MedusaApp(
 
     // "Who's watching?" once per launch, when there is more than one profile.
     LaunchedEffect(profiles.profiles.size) {
-        if (!askedWho && profiles.profiles.size > 1) { askedWho = true; go(Screen.Profiles) }
+        if (!Session.askedWho && profiles.profiles.size > 1) { Session.askedWho = true; go(Screen.Profiles) }
     }
 
     // Put focus somewhere sensible whenever the screen changes (the old screen's focused element is gone).
@@ -256,6 +287,10 @@ fun MedusaApp(
     }}
 
 private const val NEW_PROFILE = "new"
+private const val EXIT_WINDOW_MS = 2_500L
+
+/** Things asked once per app process, not once per screen (coming back to Medusa doesn't ask again). */
+private object Session { var askedWho = false }
 
 /** Focus a control as soon as it is on screen (screens fill in a moment after they open). */
 private suspend fun FocusRequester.requestWhenReady() {

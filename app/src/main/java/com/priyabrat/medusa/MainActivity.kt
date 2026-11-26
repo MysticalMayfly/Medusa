@@ -32,7 +32,11 @@ import com.priyabrat.medusa.update.Updater
  */
 class MainActivity : AppCompatActivity(), Updater.Listener {
 
-    private companion object { const val REFRESH_HOURS = 6L }
+    private companion object {
+        const val REFRESH_HOURS = 6L
+        /** The intro plays once per process: coming back to Medusa while it is still in memory skips it. */
+        var introPlayed = false
+    }
 
     private lateinit var updater: Updater
 
@@ -46,6 +50,12 @@ class MainActivity : AppCompatActivity(), Updater.Listener {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // Images: a smaller memory cache than Coil's default (the TV has little free memory), cached on disk instead.
+        coil3.SingletonImageLoader.setSafe { ctx ->
+            coil3.ImageLoader.Builder(ctx)
+                .memoryCache { coil3.memory.MemoryCache.Builder().maxSizePercent(ctx, 0.12).build() }
+                .build()
+        }
         updater = Updater(this, this)
         settings = settings.copy(
             version = getString(R.string.version_fmt, Updater.installedVersionName(this), Updater.installedVersionCode(this)),
@@ -64,8 +74,8 @@ class MainActivity : AppCompatActivity(), Updater.Listener {
         setContent {
             MedusaTheme {
                 // The loading screen plays once per launch (not again after a configuration change).
-                var booting by rememberSaveable { mutableStateOf(true) }
-                var appShown by rememberSaveable { mutableStateOf(false) }
+                var booting by rememberSaveable { mutableStateOf(!introPlayed) }
+                var appShown by rememberSaveable { mutableStateOf(introPlayed) }
                 androidx.compose.runtime.SideEffect { bootActive = booting }
                 Box {
                     if (appShown) MedusaApp(
@@ -75,7 +85,7 @@ class MainActivity : AppCompatActivity(), Updater.Listener {
                         onGoogleSignIn = if (google.configured) ::signInWithGoogle else null,
                         onGoogleSignOut = ::signOutOfGoogle,
                     )
-                    if (booting) BootScreen(showApp = { appShown = true }, onDone = { booting = false })
+                    if (booting) BootScreen(showApp = { appShown = true }, onDone = { booting = false; introPlayed = true })
                 }
             }
         }
@@ -161,8 +171,8 @@ class MainActivity : AppCompatActivity(), Updater.Listener {
             Updater.State.Checking -> { enabled = false; getString(R.string.status_checking) }
             Updater.State.UpToDate -> getString(R.string.status_latest)
             is Updater.State.Available -> {
-                label = getString(R.string.btn_install, state.info.versionName)
-                getString(R.string.status_available, state.info.versionName)
+                label = getString(R.string.btn_install, state.info.versionCode.toString())
+                getString(R.string.status_available, state.info.versionCode.toString())
             }
             is Updater.State.Downloading -> {
                 enabled = false

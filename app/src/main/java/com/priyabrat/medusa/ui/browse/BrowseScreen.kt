@@ -56,7 +56,7 @@ class BrowseActions(
  * and counts, platform tabs, the filters and sort, then the poster wall.
  */
 @Composable
-fun BrowseScreen(state: BrowseUiState, actions: BrowseActions, header: @Composable () -> Unit) {
+fun BrowseScreen(state: BrowseUiState, actions: BrowseActions, header: @Composable () -> Unit, heroEntry: androidx.compose.ui.focus.FocusRequester? = null) {
     PageGrid {
         fullWidth("top") {
             val picks = state.picks.ifEmpty { listOfNotNull(state.pick) }
@@ -64,7 +64,7 @@ fun BrowseScreen(state: BrowseUiState, actions: BrowseActions, header: @Composab
             // arrive a moment after the page opens, and rebuilding the header then threw the remote's focus away.
             // More has no carousel (BrowseKind.More), so it keeps a short gap instead.
             Box {
-                if (state.kind != BrowseKind.More) HeroCarousel(picks, actions.hero, height = Dimens.PageHeroHeight)
+                if (state.kind != BrowseKind.More) HeroCarousel(picks, actions.hero, height = Dimens.PageHeroHeight, entry = heroEntry)
                 else Spacer(Modifier.height(Dimens.HeaderControl + Dimens.SafeTop + Dimens.Gap22))
                 header()
             }
@@ -112,7 +112,7 @@ fun LazyListScope.fullWidth(key: String, content: @Composable () -> Unit) {
 /** The poster wall (.grid of .pc): rows of [Dimens.WallColumns] equal posters inside the safe margins. */
 fun LazyListScope.posterWall(items: List<TitleCard>, onOpen: (String) -> Unit) {
     if (items.isEmpty()) {
-        item("empty") { EmptyNote("Nothing here yet", "Titles appear here once the database is connected.") }
+        item("empty") { EmptyNote("Nothing to show", "Try another filter, or check back after the catalogue refreshes.") }
         return
     }
     val rows = items.chunked(Dimens.WallColumns)

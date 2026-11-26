@@ -167,10 +167,8 @@ fun ProfileScreen(state: ProfilePageState, actions: ProfileActions, header: @Com
                         if (!state.active) Pill("Switch to ${state.name}", { actions.onSwitch(state.id) }, Modifier.focusRequester(firstButton), style = PillStyle.Primary)
                         Pill("Edit profile", { actions.onEdit(state.id) }, if (state.active) Modifier.focusRequester(firstButton) else Modifier)
                         Pill("All profiles", actions.onAllProfiles)
-                        actions.onGoogle?.let { google ->
-                            if (state.google == null) Pill("Sign in with Google", { google(state.id) })
-                            else Pill("Sign out of Google", { actions.onGoogleSignOut(state.id) })
-                        }
+                        // Signing out is in Edit profile, away from the everyday buttons.
+                        actions.onGoogle?.let { google -> if (state.google == null) Pill("Sign in with Google", { google(state.id) }) }
                     }
                 }
             }
@@ -189,7 +187,14 @@ fun ProfileScreen(state: ProfilePageState, actions: ProfileActions, header: @Com
 
 /** Add or edit a profile: a name typed with the remote's keyboard, and one of the avatars. */
 @Composable
-fun ProfileEditDialog(start: ProfileTile?, canDelete: Boolean, onSave: (String, Int) -> Unit, onDelete: () -> Unit, onDismiss: () -> Unit) {
+fun ProfileEditDialog(
+    start: ProfileTile?,
+    canDelete: Boolean,
+    onSave: (String, Int) -> Unit,
+    onDelete: () -> Unit,
+    onDismiss: () -> Unit,
+    onGoogleSignOut: (() -> Unit)? = null,
+) {
     var name by remember { mutableStateOf(start?.name ?: "") }
     var avatar by remember { mutableIntStateOf(start?.avatar ?: 1) }
     var sure by remember { mutableStateOf(false) }
@@ -238,6 +243,7 @@ fun ProfileEditDialog(start: ProfileTile?, canDelete: Boolean, onSave: (String, 
                 Pill("Save", { onSave(name, avatar) }, style = PillStyle.Primary, enabled = name.isNotBlank())
                 Pill("Cancel", onDismiss)
                 if (canDelete) Pill(if (sure) "Press again to delete" else "Delete profile", { if (sure) onDelete() else sure = true })
+                onGoogleSignOut?.let { Pill("Sign out of Google", it) }
             }
         }
     }

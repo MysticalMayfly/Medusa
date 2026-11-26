@@ -62,7 +62,15 @@ val LocalTrailersPaused = compositionLocalOf { false }
  * the end, [onFailed] once when it never started.
  */
 @Composable
-fun TrailerLayer(videoId: String, paused: Boolean, dipped: Boolean, onEnded: () -> Unit, onFailed: () -> Unit, modifier: Modifier = Modifier) {
+fun TrailerLayer(
+    videoId: String,
+    paused: Boolean,
+    dipped: Boolean,
+    onEnded: () -> Unit,
+    onFailed: () -> Unit,
+    modifier: Modifier = Modifier,
+    onShown: (Boolean) -> Unit = {},
+) {
     val context = LocalContext.current
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     val ended by rememberUpdatedState(onEnded)
@@ -128,6 +136,8 @@ fun TrailerLayer(videoId: String, paused: Boolean, dipped: Boolean, onEnded: () 
 
     // Reveal once playing for SIGN_S; fade out END_LEAD before the end; then tell the carousel.
     var revealed by remember(videoId) { mutableStateOf(false) }
+    val shown by rememberUpdatedState(onShown)
+    LaunchedEffect(revealed) { shown(revealed) }
     var fading by remember(videoId) { mutableStateOf(false) }
     LaunchedEffect(second, playingSince, paused) {
         val p = player ?: return@LaunchedEffect
@@ -155,24 +165,17 @@ fun TrailerLayer(videoId: String, paused: Boolean, dipped: Boolean, onEnded: () 
     BoxWithConstraints(modifier.fillMaxSize().clipToBounds()) {
         val w = maxOf(maxWidth, maxHeight * (16f / 9f))
         val h = w * (9f / 16f)
-        // Speed: the player is laid out at half size and scaled up. YouTube picks the stream by player size, so the
-        // TV decodes a lighter video and the WebView composites a quarter of the pixels; behind the fades the
-        // difference is hard to see. (At full size, playback alone kept the TV under 30 frames a second.)
+        // Full size: the video surface ignores Compose scaling, so a half-size player scaled up only filled part of
+        // the carousel and left the backdrop showing beside it.
         AndroidView(
             factory = { view },
             modifier = Modifier
-                .requiredSize(w * VIDEO_SCALE, h * VIDEO_SCALE)
+                .requiredSize(w, h)
                 .focusProperties { canFocus = false }
-                .graphicsLayer {
-                    this.alpha = alpha.value
-                    scaleX = 1f / VIDEO_SCALE
-                    scaleY = 1f / VIDEO_SCALE
-                },
+                .graphicsLayer { this.alpha = alpha.value },
         )
     }
 }
-
-private const val VIDEO_SCALE = 0.5f
 
 private suspend fun fadeVolume(p: YouTubePlayer, from: Int, to: Int) {
     val steps = (TrailerTiming.FADE_MS / 100).coerceAtLeast(1)

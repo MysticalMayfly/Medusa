@@ -1,5 +1,13 @@
 package com.priyabrat.medusa.ui.shell
 
+import androidx.compose.ui.focus.onFocusChanged
+
+import androidx.compose.ui.input.key.type
+
+import androidx.compose.ui.input.key.key
+
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
@@ -82,7 +90,12 @@ fun AppHeader(
     modifier: Modifier = Modifier,
     profile: com.priyabrat.medusa.ui.model.ProfileTile? = null,
     onProfile: () -> Unit = {},
+    /** Down from a tab goes here (the carousel's main button) instead of the nearest thing below. */
+    down: FocusRequester? = null,
 ) {
+    // Tabs open on highlight only when you move along them with left and right. Arriving from below (Up from a
+    // page) just lands on the open tab, so it never switches pages by accident.
+    val alongTabs = androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
     Row(
         modifier
             .fillMaxWidth()
@@ -119,11 +132,18 @@ fun AppHeader(
                         }
                     }
                 }
+                .onPreviewKeyEvent { e ->
+                    if (e.type == androidx.compose.ui.input.key.KeyEventType.KeyDown) {
+                        alongTabs.value = e.key == androidx.compose.ui.input.key.Key.DirectionLeft || e.key == androidx.compose.ui.input.key.Key.DirectionRight
+                    }
+                    false
+                }
+                .onFocusChanged { if (!it.hasFocus) alongTabs.value = false }
                 .focusGroup(),
             horizontalArrangement = Arrangement.spacedBy(3.dp),
         ) {
             Tab.entries.forEach { tab ->
-                NavItem(tabLabel(tab), selected = tab == current, onClick = { onTab(tab) }, requester = focus.tabs.getValue(tab))
+                NavItem(tabLabel(tab), selected = tab == current, onClick = { onTab(tab) }, requester = focus.tabs.getValue(tab), down = down, armed = alongTabs)
             }
         }
         Box(Modifier.weight(1f))
@@ -140,14 +160,21 @@ fun AppHeader(
 }
 
 @Composable
-private fun NavItem(label: String, selected: Boolean, onClick: () -> Unit, requester: FocusRequester) {
+private fun NavItem(
+    label: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+    requester: FocusRequester,
+    down: FocusRequester? = null,
+    armed: androidx.compose.runtime.State<Boolean>? = null,
+) {
     val f = rememberFocusable()
     val focused = f.focused.value
     // Moving along the tabs with left and right opens each one, like a TV launcher: no OK press needed.
     // A short pause first, so sliding past a few tabs doesn't build every page on the way.
     val latestClick = androidx.compose.runtime.rememberUpdatedState(onClick)
     androidx.compose.runtime.LaunchedEffect(focused, selected) {
-        if (focused && !selected) {
+        if (focused && !selected && armed?.value != false) {
             kotlinx.coroutines.delay(TAB_FOCUS_DELAY_MS)
             latestClick.value()
         }
@@ -164,6 +191,7 @@ private fun NavItem(label: String, selected: Boolean, onClick: () -> Unit, reque
     Box(
         Modifier
             .focusRequester(requester)
+            .then(if (down != null) Modifier.focusProperties { this.down = down } else Modifier)
             .focusRing(focused, offset = 2.dp)
             .height(Dimens.NavItemH)
             .clip(Shapes.Pill)
@@ -184,4 +212,4 @@ private fun NavItem(label: String, selected: Boolean, onClick: () -> Unit, reque
     }
 }
 
-private const val TAB_FOCUS_DELAY_MS = 220L
+private const val TAB_FOCUS_DELAY_MS = 350L

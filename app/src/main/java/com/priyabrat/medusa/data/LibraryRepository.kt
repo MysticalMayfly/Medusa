@@ -301,6 +301,13 @@ class LibraryRepository(private val store: LibraryStore) : MedusaRepository {
         save()
     }
 
+    /** Each Indian service's Android TV app, opened when the catalogue has no deep link for a title. */
+    private val SERVICE_APPS = mapOf(
+        "NF" to "com.netflix.ninja", "PV" to "com.amazon.amazonvideo.livingroom", "JH" to "in.startv.hotstar",
+        "SL" to "com.sonyliv", "AP" to "com.apple.atve.androidtv.appletv", "Z5" to "com.graymatrix.did",
+        "LP" to "com.lionsgateplay.videoapp", "MU" to "com.mubi", "PX" to "com.plexapp.android",
+    )
+
     private val kindLabel = listOf("Your plan", "Free", "Subscription", "Rent", "Buy")
 
     private class Ranked(val o: Offer, val rank: Int)
@@ -334,21 +341,32 @@ class LibraryRepository(private val store: LibraryStore) : MedusaRepository {
 
     private fun Snap.offerLabel(x: Ranked) = x.o.code?.let { svc(it)?.name } ?: x.o.name
 
-    private fun Snap.heroPick(t: T, scope: String): HeroPick {
-        val tags = (t.r.franchises + t.r.genres).filter { !(scope == "horror" && it == "Horror") }.take(3)
-        val eye = when (scope) { "movie" -> "Movie pick"; "show" -> "Show pick"; "horror" -> "Horror pick"; else -> "Tonight’s pick" }
+    private fun Snap.heroPick(t: T, scope: String, first: Boolean = true): HeroPick {
+        // Genres only (franchise and collection names read like genres and confused the line), from TMDB.
+        val tags = t.r.tmdbGenres.ifEmpty { t.r.genres }.filter { !(scope == "horror" && it == "Horror") }.take(3)
+        // "Tonight's pick" names the first slide only; the others show just their genres.
+        val eye = if (!first) "" else when (scope) { "movie" -> "Movie pick"; "show" -> "Show pick"; "horror" -> "Horror pick"; else -> "Tonight’s pick" }
         val offers = offers(t)
-        val options = offers.mapIndexed { i, x ->
+        var options = offers.mapIndexed { i, x ->
             WatchOption("o$i", offerLabel(x), x.o.code ?: offerLabel(x).filter { it.isLetterOrDigit() }.take(2).uppercase(), kindLabel[x.rank], x.o.url)
         }
+        // No JustWatch link, but the catalogue knows the services it streams on: open those apps instead
+        // (the details panel already said "Prime Video · your plan" while this button said there was no link).
+        if (options.isEmpty()) {
+            options = codes(t).mapNotNull { c -> SERVICE_APPS[c]?.let { pkg ->
+                val s = svc(c)
+                WatchOption("s$c", s?.name ?: c, c, if (s?.mine == true) "Your plan" else if (s?.free == true) "Free" else "Subscription", "app:$pkg")
+            } }
+        }
         val label = when {
-            offers.size == 1 -> "Watch on ${offerLabel(offers[0])}${if (offers[0].rank >= 3) " · ${kindLabel[offers[0].rank]}" else ""}"
-            offers.isEmpty() -> "Where to watch"
+            options.size == 1 && offers.size == 1 -> "Watch on ${offerLabel(offers[0])}${if (offers[0].rank >= 3) " · ${kindLabel[offers[0].rank]}" else ""}"
+            options.size == 1 -> "Watch on ${options[0].service}"
+            options.isEmpty() -> "Not streaming in India"
             else -> "Watch now"
         }
         return HeroPick(
             id = t.sid,
-            eyebrow = eye + if (tags.isNotEmpty()) " · " + tags.joinToString(" · ") else "",
+            eyebrow = listOf(eye, tags.joinToString(" · ")).filter { it.isNotEmpty() }.joinToString(" · "),
             title = t.r.title,
             year = t.year?.toString() ?: "",
             runtime = if (t.isShow) seasonsLabel(t) else t.r.runtime?.let { "$it min" } ?: "",
@@ -400,7 +418,7 @@ class LibraryRepository(private val store: LibraryStore) : MedusaRepository {
 
         val going = titles.filter { it.isShow && !it.watched && it.progSeason != null && it.r.avail }.sortedByDescending { it.progAt ?: "" }
         return HomeUiState(
-            picks = round("all").map { heroPick(it, "all") },
+            picks = round("all").mapIndexed { n, t -> heroPick(t, "all", n == 0) },
             continueTitle = "Continue watching",
             continueWatching = going.map { continueItem(it) },
             shelves = rows,
@@ -494,14 +512,15 @@ class LibraryRepository(private val store: LibraryStore) : MedusaRepository {
         return BrowseUiState(
             kind = kind,
             picks = when (kind) {
-                BrowseKind.Movies -> round("movie").map { heroPick(it, "movie") }
-                BrowseKind.Shows -> round("show").map { heroPick(it, "show") }
+                BrowseKind.Movies -> round("movie").mapIndexed { n, t -> heroPick(t, "movie", n == 0) }
+                BrowseKind.Shows -> round("show").mapIndexed { n, t -> heroPick(t, "show", n == 0) }
                 BrowseKind.More -> emptyList()
             },
             title = when (kind) { BrowseKind.Movies -> "Movies"; BrowseKind.Shows -> "TV shows"; BrowseKind.More -> "More" },
             summary = (if (more) "Not streaming, free, for rent or for sale in India right now · " else "") +
                 "${base.count { it.watched }} of ${base.size} watched" + (if (kind == BrowseKind.Shows) " · $going in progress" else ""),
-            platformTabs = tabs,
+            // More holds titles you can't watch in India, so service chips there only confused (premiere platform).
+            platformTabs = if (more) emptyList() else tabs,
             typeSegments = if (more) listOf("all" to "Everything", "show" to "Shows", "movie" to "Movies").map { (k, l) -> FilterOption(k, l, selected = type == k) } else emptyList(),
             selects = listOfNotNull(tagSelect("franchise", "Any franchise"), tagSelect("genre", "Any genre"), tagSelect("studio", "Any studio")),
             resultCount = "${sorted.size} ${if (sorted.size == 1) "title" else "titles"}",
@@ -543,7 +562,7 @@ class LibraryRepository(private val store: LibraryStore) : MedusaRepository {
             years.map { FilterOption(it.year.toString(), it.year.toString(), selected = tab == it.year.toString()) } +
             FilterOption("all", "All horror", selected = tab == "all")
         return HorrorUiState(
-            picks = round("horror").map { heroPick(it, "horror") },
+            picks = round("horror").mapIndexed { n, t -> heroPick(t, "horror", n == 0) },
             tabs = tabs,
             shelves = if (tab == "browse") horrorRows() else emptyList(),
             wall = if (tab == "browse") null else horrorWall(tab, f),
@@ -870,7 +889,7 @@ class LibraryRepository(private val store: LibraryStore) : MedusaRepository {
         val going = s.titles.count { it.isShow && !it.watched && it.progSeason != null }
         ProfilePageState(
             id = p.id, name = p.name, avatar = p.avatar, photoUrl = p.photoUrl,
-            google = googleEmail(p.id)?.let { "Signed in with Google as $it" }, active = p.id == ps.current.id,
+            google = googleEmail(p.id)?.let { "Signed in with Google" }, active = p.id == ps.current.id,
             stat = "${watched.size} watched · ${interested.size} interested" + if (going > 0) " · $going show${if (going > 1) "s" else ""} in progress" else "",
             interested = interested.map { shelfCard(it) },
             watched = watched.map { shelfCard(it) },
