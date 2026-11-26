@@ -69,7 +69,14 @@ sealed interface Screen {
  * Screens get state from [repo] and send actions back to it; they never fetch anything themselves.
  */
 @Composable
-fun MedusaApp(repo: MedusaRepository, settings: SettingsUiState, onUpdateButton: () -> Unit, onImportButton: () -> Unit) {
+fun MedusaApp(
+    repo: MedusaRepository,
+    settings: SettingsUiState,
+    onUpdateButton: () -> Unit,
+    onImportButton: () -> Unit,
+    onGoogleSignIn: ((String) -> Unit)? = null,
+    onGoogleSignOut: (String) -> Unit = {},
+) {
     val stack = remember { mutableStateListOf<Screen>(Screen.Top(Tab.Home)) }
     val screen = stack.last()
     var panelId by remember { mutableStateOf<String?>(null) }
@@ -199,6 +206,8 @@ fun MedusaApp(repo: MedusaRepository, settings: SettingsUiState, onUpdateButton:
                             onSwitch = { repo.switchProfile(it) },
                             onEdit = { editing = it },
                             onAllProfiles = { go(Screen.Profiles) },
+                            onGoogle = onGoogleSignIn,
+                            onGoogleSignOut = onGoogleSignOut,
                         )
                     }
                     ProfileScreen(state, actions, header)

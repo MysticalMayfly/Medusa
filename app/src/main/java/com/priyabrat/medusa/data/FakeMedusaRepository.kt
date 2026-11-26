@@ -321,6 +321,8 @@ class FakeMedusaRepository : MedusaRepository {
     override fun switchProfile(id: String) {}
     override fun saveProfile(id: String?, name: String, avatar: Int): String = id ?: "p1"
     override fun deleteProfile(id: String) {}
+    override fun linkGoogle(id: String, name: String, photoUrl: String?) {}
+    override fun unlinkGoogle(id: String) {}
 
     override fun selectFilter(screen: String, group: String, optionId: String) =
         state.update { it.copy(selected = it.selected + (key(screen, group) to optionId)) }

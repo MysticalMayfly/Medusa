@@ -235,7 +235,7 @@ data class SearchUiState(
 )
 
 /** A profile: name and one of the built-in avatars (0 until AVATAR_COUNT). */
-data class ProfileTile(val id: String, val name: String, val avatar: Int, val active: Boolean)
+data class ProfileTile(val id: String, val name: String, val avatar: Int, val active: Boolean, val photoUrl: String? = null)
 
 const val AVATAR_COUNT = 8
 
@@ -250,6 +250,8 @@ data class ProfilePageState(
     val id: String = "",
     val name: String = "",
     val avatar: Int = 0,
+    val photoUrl: String? = null,         // the Google account's picture, once signed in
+    val google: String? = null,           // "Signed in as name@gmail.com", or null
     val active: Boolean = false,
     val stat: String = "",                // "18 watched · 6 interested · 2 shows in progress"
     val interested: List<TitleCard> = emptyList(),

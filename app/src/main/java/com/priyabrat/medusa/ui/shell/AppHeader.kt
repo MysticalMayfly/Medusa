@@ -133,7 +133,7 @@ fun AppHeader(
             val pf = rememberFocusable()
             Box(
                 Modifier.focusRequester(focus.profile).focusRing(pf.focused.value, radius = Dimens.HeaderControl / 2, offset = 2.dp).tvClick(pf, onClick = onProfile),
-            ) { com.priyabrat.medusa.ui.profiles.Avatar(profile.avatar, profile.name, Dimens.HeaderControl) }
+            ) { com.priyabrat.medusa.ui.profiles.Avatar(profile.avatar, profile.name, Dimens.HeaderControl, photoUrl = profile.photoUrl) }
         }
         IconCircle(MedusaIcons.Gear, onSettings, Modifier.focusRequester(focus.settings), dot = updateWaiting)
     }

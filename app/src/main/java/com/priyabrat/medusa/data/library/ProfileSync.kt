@@ -40,7 +40,9 @@ class ServerProfiles(val profiles: List<Profile>, val rows: Map<String, List<Ser
         fun parse(text: String): ServerProfiles {
             val o = JSONObject(text)
             val ps = o.getJSONArray("profiles")
-            val list = (0 until ps.length()).map { ps.getJSONObject(it) }.map { Profile(it.getString("id"), it.optString("name"), it.optInt("avatar")) }
+            val list = (0 until ps.length()).map { ps.getJSONObject(it) }.map {
+                Profile(it.getString("id"), it.optString("name"), it.optInt("avatar"), if (it.isNull("photo_url")) null else it.optString("photo_url").ifEmpty { null })
+            }
             val ts = o.getJSONArray("titles")
             val rows = HashMap<String, MutableList<ServerRow>>()
             for (i in 0 until ts.length()) {

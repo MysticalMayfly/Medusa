@@ -12,6 +12,7 @@ import androidx.compose.runtime.setValue
 import androidx.lifecycle.lifecycleScope
 import com.priyabrat.medusa.data.LibraryRepository
 import com.priyabrat.medusa.data.library.CatalogueSource
+import com.priyabrat.medusa.data.library.GoogleAccount
 import com.priyabrat.medusa.data.library.LibraryStore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -37,7 +38,7 @@ class MainActivity : AppCompatActivity(), Updater.Listener {
 
     /** Your library, imported once from the Mac (Settings > Import library from Mac); screens stay the same. */
     private val libraryStore by lazy { LibraryStore(applicationContext) }
-    private val repository by lazy { LibraryRepository(libraryStore) }
+    private val repository by lazy { LibraryRepository(libraryStore).also { r -> r.googleEmail = { GoogleAccount.email(applicationContext, it) } } }
 
     private var settings by mutableStateOf(
         SettingsUiState(version = "", status = "", buttonLabel = "", buttonEnabled = true, progressPercent = null, updateWaiting = false),
@@ -67,7 +68,13 @@ class MainActivity : AppCompatActivity(), Updater.Listener {
                 var appShown by rememberSaveable { mutableStateOf(false) }
                 androidx.compose.runtime.SideEffect { bootActive = booting }
                 Box {
-                    if (appShown) MedusaApp(repository, settings, onUpdateButton = { updater.onButtonPressed() }, onImportButton = ::refreshCatalogue)
+                    if (appShown) MedusaApp(
+                        repository, settings,
+                        onUpdateButton = { updater.onButtonPressed() },
+                        onImportButton = ::refreshCatalogue,
+                        onGoogleSignIn = if (google.configured) ::signInWithGoogle else null,
+                        onGoogleSignOut = ::signOutOfGoogle,
+                    )
                     if (booting) BootScreen(showApp = { appShown = true }, onDone = { booting = false })
                 }
             }
@@ -75,6 +82,27 @@ class MainActivity : AppCompatActivity(), Updater.Listener {
 
         // Quiet check on launch; installing still needs a button press
         if (savedInstanceState == null) updater.check()
+    }
+
+    private val google by lazy { GoogleAccount(this) }
+
+    /** Profile page > Sign in with Google: the TV's account picker, then the profile takes the account's name and picture. */
+    private fun signInWithGoogle(profile: String) {
+        lifecycleScope.launch {
+            val r = runCatching { google.signIn(this@MainActivity) }
+            r.onSuccess {
+                GoogleAccount.save(applicationContext, profile, it)
+                repository.linkGoogle(profile, it.name, it.photoUrl)
+                android.widget.Toast.makeText(this@MainActivity, getString(R.string.google_signed_in, it.name), android.widget.Toast.LENGTH_SHORT).show()
+            }.onFailure {
+                android.widget.Toast.makeText(this@MainActivity, getString(R.string.google_failed, it.message ?: it.javaClass.simpleName), android.widget.Toast.LENGTH_LONG).show()
+            }
+        }
+    }
+
+    private fun signOutOfGoogle(profile: String) {
+        GoogleAccount.signOut(applicationContext, profile)
+        repository.unlinkGoogle(profile)
     }
 
     private fun libraryLine(count: Int, fetchedAt: String): String {

@@ -388,9 +388,10 @@ def sync():
     for e in events:
         pid, kind, tid, v, at = e['profile_id'], e['kind'], e['title_id'], e.get('value') or {}, norm(e['created_at'])
         if kind == 'profile':
-            c.execute('INSERT INTO profiles (id, name, avatar, updated_at) VALUES (?,?,?,?) ON CONFLICT(id) DO UPDATE SET '
-                      'name=excluded.name, avatar=excluded.avatar, updated_at=excluded.updated_at WHERE excluded.updated_at > profiles.updated_at',
-                      (pid, (v.get('name') or 'Profile')[:20], int(v.get('avatar') or 0), at))
+            c.execute('INSERT INTO profiles (id, name, avatar, photo_url, updated_at) VALUES (?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET '
+                      'name=excluded.name, avatar=excluded.avatar, photo_url=excluded.photo_url, updated_at=excluded.updated_at '
+                      'WHERE excluded.updated_at > profiles.updated_at',
+                      (pid, (v.get('name') or 'Profile')[:20], int(v.get('avatar') or 0), v.get('photo_url'), at))
         elif kind == 'delete_profile':
             c.execute('DELETE FROM profiles WHERE id=?', (pid,))
             c.execute('DELETE FROM profile_titles WHERE profile_id=?', (pid,))

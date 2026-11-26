@@ -851,7 +851,10 @@ class LibraryRepository(private val store: LibraryStore) : MedusaRepository {
 
     // ================================================================ profiles
 
-    private fun tile(p: Profile, ps: Profiles) = ProfileTile(p.id, p.name, p.avatar, p.id == ps.current.id)
+    private fun tile(p: Profile, ps: Profiles) = ProfileTile(p.id, p.name, p.avatar, p.id == ps.current.id, p.photoUrl)
+
+    /** Set by MainActivity: the Google account a profile is signed in with, if any. */
+    var googleEmail: (String) -> String? = { null }
 
     override fun profiles(): Flow<ProfilesUiState> = profilesFlow.map { ps ->
         ProfilesUiState(ps.list.map { tile(it, ps) }, tile(ps.current, ps))
@@ -866,7 +869,8 @@ class LibraryRepository(private val store: LibraryStore) : MedusaRepository {
         val watched = s.titles.filter { it.watched }.sortedByDescending { mine.watchedAt[it.id] ?: "" }
         val going = s.titles.count { it.isShow && !it.watched && it.progSeason != null }
         ProfilePageState(
-            id = p.id, name = p.name, avatar = p.avatar, active = p.id == ps.current.id,
+            id = p.id, name = p.name, avatar = p.avatar, photoUrl = p.photoUrl,
+            google = googleEmail(p.id)?.let { "Signed in with Google as $it" }, active = p.id == ps.current.id,
             stat = "${watched.size} watched · ${interested.size} interested" + if (going > 0) " · $going show${if (going > 1) "s" else ""} in progress" else "",
             interested = interested.map { shelfCard(it) },
             watched = watched.map { shelfCard(it) },
@@ -900,8 +904,28 @@ class LibraryRepository(private val store: LibraryStore) : MedusaRepository {
         val next = ps.copy(list = list)
         profilesFlow.value = next
         io.launch { store.saveProfiles(next) }
-        record(newId, "profile", null, JSONObject().put("name", clean).put("avatar", avatar))
+        record(newId, "profile", null, JSONObject().put("name", clean).put("avatar", avatar)
+            .put("photo_url", list.firstOrNull { it.id == newId }?.photoUrl ?: JSONObject.NULL))
         return newId
+    }
+
+    override fun linkGoogle(id: String, name: String, photoUrl: String?) {
+        val ps = profilesFlow.value
+        val p = ps.list.firstOrNull { it.id == id } ?: return
+        val clean = name.trim().ifEmpty { p.name }.take(20)
+        val next = ps.copy(list = ps.list.map { if (it.id == id) it.copy(name = clean, photoUrl = photoUrl) else it })
+        profilesFlow.value = next
+        io.launch { store.saveProfiles(next) }
+        record(id, "profile", null, JSONObject().put("name", clean).put("avatar", p.avatar).put("photo_url", photoUrl ?: JSONObject.NULL))
+    }
+
+    override fun unlinkGoogle(id: String) {
+        val ps = profilesFlow.value
+        val p = ps.list.firstOrNull { it.id == id } ?: return
+        val next = ps.copy(list = ps.list.map { if (it.id == id) it.copy(photoUrl = null) else it })
+        profilesFlow.value = next
+        io.launch { store.saveProfiles(next) }
+        record(id, "profile", null, JSONObject().put("name", p.name).put("avatar", p.avatar).put("photo_url", JSONObject.NULL))
     }
 
     override fun deleteProfile(id: String) {

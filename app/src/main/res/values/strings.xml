@@ -50,4 +50,6 @@
     <string name="import_none">No catalogue yet. It downloads when the TV is online.</string>
     <string name="import_done">%1$d titles · updated %2$s</string>
     <string name="import_failed">Couldn’t update (%1$s). %2$s</string>
+    <string name="google_signed_in">Signed in as %1$s</string>
+    <string name="google_failed">Google sign-in didn’t finish: %1$s</string>
 </resources>

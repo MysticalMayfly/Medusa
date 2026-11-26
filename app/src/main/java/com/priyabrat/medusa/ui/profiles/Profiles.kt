@@ -75,13 +75,17 @@ private val avatarColours = listOf(
 )
 
 @Composable
-fun Avatar(avatar: Int, name: String, size: Dp, modifier: Modifier = Modifier) {
+fun Avatar(avatar: Int, name: String, size: Dp, modifier: Modifier = Modifier, photoUrl: String? = null) {
     val (a, b) = avatarColours[Math.floorMod(avatar, avatarColours.size)]
     Box(
         modifier.size(size).clip(CircleShape).background(Brush.linearGradient(listOf(a, b))),
         contentAlignment = Alignment.Center,
     ) {
-        Text(
+        // A Google picture covers the letter once it has loaded.
+        if (photoUrl != null) coil3.compose.AsyncImage(
+            model = photoUrl, contentDescription = null,
+            contentScale = androidx.compose.ui.layout.ContentScale.Crop, modifier = Modifier.matchParentSize(),
+        ) else Text(
             name.trim().take(1).uppercase().ifEmpty { "?" },
             color = Color.White,
             fontSize = (size.value * 0.42f).sp,
@@ -92,7 +96,7 @@ fun Avatar(avatar: Int, name: String, size: Dp, modifier: Modifier = Modifier) {
 
 /** A focusable avatar with its name under it (the picker's tiles). */
 @Composable
-private fun AvatarTile(name: String, avatar: Int, size: Dp, onClick: () -> Unit, modifier: Modifier = Modifier, label: String = name, add: Boolean = false) {
+private fun AvatarTile(name: String, avatar: Int, size: Dp, onClick: () -> Unit, modifier: Modifier = Modifier, label: String = name, add: Boolean = false, photoUrl: String? = null) {
     val f = rememberFocusable()
     val focused = f.focused.value
     Column(modifier.tvClick(f, onClick = onClick), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -102,7 +106,7 @@ private fun AvatarTile(name: String, avatar: Int, size: Dp, onClick: () -> Unit,
                     Text("+", color = MedusaColors.Muted, fontSize = (size.value * 0.4f).sp)
                 }
             } else {
-                Avatar(avatar, name, size)
+                Avatar(avatar, name, size, photoUrl = photoUrl)
             }
         }
         Text(label, style = MedusaType.BodyStrong, color = if (focused) MedusaColors.Fg else MedusaColors.Muted, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -121,7 +125,7 @@ fun WhoIsWatchingScreen(state: ProfilesUiState, onPick: (String) -> Unit, onAdd:
         Text("Who’s watching?", style = MedusaType.PageTitle, modifier = Modifier.rise())
         Row(Modifier.padding(top = 36.dp).rise(), horizontalArrangement = Arrangement.spacedBy(28.dp)) {
             state.profiles.forEachIndexed { i, p ->
-                AvatarTile(p.name, p.avatar, 96.dp, { onPick(p.id) }, if (i == 0) Modifier.focusRequester(first) else Modifier)
+                AvatarTile(p.name, p.avatar, 96.dp, { onPick(p.id) }, if (i == 0) Modifier.focusRequester(first) else Modifier, photoUrl = p.photoUrl)
             }
             if (state.profiles.size < 6) AvatarTile("", 0, 96.dp, onAdd, label = "Add profile", add = true)
         }
@@ -134,6 +138,9 @@ class ProfileActions(
     val onSwitch: (String) -> Unit,
     val onEdit: (String) -> Unit,
     val onAllProfiles: () -> Unit,
+    /** Signs this profile in with Google (null when the build has no Google sign-in). */
+    val onGoogle: ((String) -> Unit)? = null,
+    val onGoogleSignOut: (String) -> Unit = {},
 )
 
 /** A profile's own page: big avatar and name, its numbers, then its Interested and Watched rows. */
@@ -151,14 +158,19 @@ fun ProfileScreen(state: ProfilePageState, actions: ProfileActions, header: @Com
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(Dimens.Gap22),
             ) {
-                Avatar(state.avatar, state.name, 96.dp)
+                Avatar(state.avatar, state.name, 96.dp, photoUrl = state.photoUrl)
                 Column(verticalArrangement = Arrangement.spacedBy(Dimens.Gap8)) {
                     Text(state.name, style = MedusaType.PageTitle)
                     Text(state.stat, style = MedusaType.Body)
+                    state.google?.let { Text(it, style = MedusaType.Small) }
                     Row(Modifier.padding(top = Dimens.Gap8), horizontalArrangement = Arrangement.spacedBy(Dimens.Gap8)) {
                         if (!state.active) Pill("Switch to ${state.name}", { actions.onSwitch(state.id) }, Modifier.focusRequester(firstButton), style = PillStyle.Primary)
                         Pill("Edit profile", { actions.onEdit(state.id) }, if (state.active) Modifier.focusRequester(firstButton) else Modifier)
                         Pill("All profiles", actions.onAllProfiles)
+                        actions.onGoogle?.let { google ->
+                            if (state.google == null) Pill("Sign in with Google", { google(state.id) })
+                            else Pill("Sign out of Google", { actions.onGoogleSignOut(state.id) })
+                        }
                     }
                 }
             }

@@ -30,12 +30,14 @@ android {
         minSdk = 34
         targetSdk = 37
         // versionCode +1 on EVERY release (never reuse/lower). versionName only for a major update.
-        versionCode = 12
+        versionCode = 13
         versionName = "1.3"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField("String", "SUPABASE_URL", "\"${supabaseProps.getProperty("url", "")}\"")
         buildConfigField("String", "SUPABASE_KEY", "\"${supabaseProps.getProperty("publishableKey", "")}\"")
+        // Google sign-in: the web client id is the audience of the ID token Supabase checks (public, not a secret).
+        buildConfigField("String", "GOOGLE_WEB_CLIENT_ID", "\"${supabaseProps.getProperty("googleWebClientId", "")}\"")
     }
 
     signingConfigs {
@@ -93,6 +95,10 @@ dependencies {
     implementation(libs.coil.network)
     // Carousel trailers: YouTube's own embedded player in a WebView (no stream extraction; the stage 1 plan).
     implementation(libs.youtube.player)
+    // Sign in with Google (Credential Manager), exchanged for a Supabase session.
+    implementation(libs.credentials)
+    implementation(libs.credentials.play)
+    implementation(libs.googleid)
     // Speed: installs the baseline profile (src/release/generated/baselineProfiles) so the TV runs
     // Medusa's scrolling and focus code precompiled from the first launch instead of interpreted.
     implementation(libs.androidx.profileinstaller)
