@@ -75,6 +75,7 @@ fun MedusaApp(
     settings: SettingsUiState,
     onUpdateButton: () -> Unit,
     onImportButton: () -> Unit,
+    onQuit: () -> Unit,
     onGoogleSignIn: ((String) -> Unit)? = null,
     onGoogleSignOut: (String) -> Unit = {},
 ) {
@@ -224,7 +225,7 @@ fun MedusaApp(
                     // and writing the older query back into the field threw away every letter after the first.
                     SearchScreen(state.copy(query = query), onQuery = { query = it }, onOpen = open, header = header, fieldFocus = searchField)
                 }
-                Screen.Settings -> SettingsScreen(settings, onUpdateButton, onImportButton, { activity?.finishAndRemoveTask() }, header, settingsButton)
+                Screen.Settings -> SettingsScreen(settings, onUpdateButton, onImportButton, { Session.askedWho = false; onQuit() }, header, settingsButton)
                 Screen.Profiles -> WhoIsWatchingScreen(
                     profiles,
                     onPick = { repo.switchProfile(it); go(Screen.Top(Tab.Home)) },

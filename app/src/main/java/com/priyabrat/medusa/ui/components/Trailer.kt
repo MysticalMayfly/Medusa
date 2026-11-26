@@ -140,22 +140,26 @@ fun TrailerLayer(
     val shown by rememberUpdatedState(onShown)
     LaunchedEffect(revealed) { shown(revealed) }
     var fading by remember(videoId) { mutableStateOf(false) }
-    LaunchedEffect(second, playingSince, paused) {
-        val p = player ?: return@LaunchedEffect
+    LaunchedEffect(second, playingSince, paused, revealed, fading) {
+        if (player == null) return@LaunchedEffect
         if (paused || fading) return@LaunchedEffect
         val played = if (playingSince >= 0f) second - playingSince else 0f
-        if (!revealed && played >= TrailerTiming.SIGN_S) {
-            revealed = true
-            p.unMute()
-            launch { fadeVolume(p, 0, if (dipped) 30 else 100) }
-            alpha.animateTo(1f, tween(TrailerTiming.FADE_MS, easing = LinearEasing))
-        }
-        if (revealed && duration > 0f && second >= duration - TrailerTiming.END_LEAD_S) {
-            fading = true
+        if (!revealed && played >= TrailerTiming.SIGN_S) revealed = true
+        if (revealed && duration > 0f && second >= duration - TrailerTiming.END_LEAD_S) fading = true
+    }
+    // Playback timestamps update repeatedly. Keep fades in a separate effect so those updates cannot cancel them.
+    LaunchedEffect(player, videoId, revealed, fading, paused) {
+        val p = player ?: return@LaunchedEffect
+        if (paused) return@LaunchedEffect
+        if (fading) {
             launch { fadeVolume(p, if (dipped) 30 else 100, 0) }
             alpha.animateTo(0f, tween(TrailerTiming.FADE_MS, easing = LinearEasing))
             p.pause()
             if (!isPaused) ended()
+        } else if (revealed) {
+            p.unMute()
+            launch { fadeVolume(p, 0, if (dipped) 30 else 100) }
+            alpha.animateTo(1f, tween(TrailerTiming.FADE_MS, easing = LinearEasing))
         }
     }
     // A shown trailer resumed after a pause has to wait out YouTube's sign again.

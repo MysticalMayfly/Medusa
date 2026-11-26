@@ -129,12 +129,17 @@ fun BootScreen(showApp: () -> Unit, onDone: () -> Unit) {
     }
     var lineIndex by remember { mutableIntStateOf(0) }
     var lineSwapAt by remember { mutableIntStateOf(-10_000) }
+    var lineEnteredAt by remember { mutableIntStateOf(-10_000) }
     LaunchedEffect(Unit) {
+        // Let the initial line finish its entrance before its first full reading interval.
+        delay(2_600L)
         while (isActive && lineIndex < lines.lastIndex) {
             delay(Boot.LINE_MS.toLong() - Boot.SWAP_MS)
             lineSwapAt = clock.value.toInt()
             delay(Boot.SWAP_MS.toLong())
             lineIndex += 1
+            lineEnteredAt = clock.value.toInt()
+            lineSwapAt = -10_000
         }
     }
 
@@ -177,7 +182,7 @@ fun BootScreen(showApp: () -> Unit, onDone: () -> Unit) {
             Portrait(t, out, Modifier.size(artW, artH))
             Wordmark(t)
             RunLine(t)
-            Note(lines[lineIndex], t, { lineSwapAt })
+            Note(lines[lineIndex], t, { lineSwapAt }, { lineEnteredAt })
         }
     }
 }
@@ -314,7 +319,7 @@ private fun RunLine(t: () -> Float) {
 }
 
 @Composable
-private fun Note(line: String, t: () -> Float, swapAt: () -> Int) {
+private fun Note(line: String, t: () -> Float, swapAt: () -> Int, enteredAt: () -> Int) {
     Text(
         text = line.uppercase(),
         style = TextStyle(fontFamily = Geist, fontSize = 11.sp, letterSpacing = 0.14.em, color = Boot.note, textAlign = TextAlign.Center),
@@ -323,8 +328,9 @@ private fun Note(line: String, t: () -> Float, swapAt: () -> Int) {
             val enter = seg(t(), 2000, 600)
             val since = t() - swapAt()
             val swap = if (since in 0f..260f) since / 260f else 0f
-            alpha = enter * (1f - swap)
-            translationY = 4.dp.toPx() * swap
+            val newLine = ((t() - enteredAt()) / Boot.SWAP_MS).coerceIn(0f, 1f)
+            alpha = enter * (1f - swap) * newLine
+            translationY = 4.dp.toPx() * (swap + 1f - newLine)
         },
     )
 }

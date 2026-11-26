@@ -82,6 +82,7 @@ class MainActivity : AppCompatActivity(), Updater.Listener {
                         repository, settings,
                         onUpdateButton = { updater.onButtonPressed() },
                         onImportButton = ::refreshCatalogue,
+                        onQuit = { introPlayed = false; finishAndRemoveTask() },
                         onGoogleSignIn = if (google.configured) ::signInWithGoogle else null,
                         onGoogleSignOut = ::signOutOfGoogle,
                     )
