@@ -48,7 +48,7 @@ create or replace view public.app_titles with (security_invoker = on) as
 select t.*,
   (t.india_status in ('streaming', 'rent') or cardinality(t.services) > 0 or jsonb_array_length(t.watch) > 0) as avail,
   -- the Mac app's hidden sort score (app/db.py score), never shown
-  case when t.rt_score is null and t.imdb_rating is null and t.tmdb_rating is null then null else round((
+  case when t.rt_score is null and t.imdb_rating is null and t.tmdb_rating is null then null else round(((
       coalesce(t.rt_score * 4.0, 0)
     + coalesce(t.imdb_rating * 10 * (case when coalesce(t.imdb_votes, 0) = 0 then 2 else 4 * least(1, t.imdb_votes / 500.0) end), 0)
     + coalesce(t.tmdb_rating * 10, 0) + 60
@@ -56,7 +56,7 @@ select t.*,
       (case when t.rt_score is null then 0 else 4 end)
     + (case when t.imdb_rating is null then 0 when coalesce(t.imdb_votes, 0) = 0 then 2 else 4 * least(1, t.imdb_votes / 500.0) end)
     + (case when t.tmdb_rating is null then 0 else 1 end) + 1
-  ), 1) end as score
+  ))::numeric, 1) end as score
 from public.titles t;
 
 alter table public.titles enable row level security;
@@ -68,4 +68,48 @@ drop policy if exists "read platforms" on public.platforms;
 create policy "read catalogue" on public.titles for select to anon using (true);
 create policy "read services" on public.services for select to anon using (true);
 create policy "read platforms" on public.platforms for select to anon using (true);
-grant select on public.app_titles, public.services, public.platforms to anon;
+grant select on public.titles, public.app_titles, public.services, public.platforms to anon;
+
+-- ---------------------------------------------------------------- profiles
+-- Profiles are made on the TV (no sign-in, built-in avatars). The TV never edits these tables directly: it appends
+-- what changed to profile_events (insert only), the Mac upkeeper copies events into the Master database and pushes
+-- the result back into profiles and profile_titles, which the TV reads and caches. The Master stays the only copy
+-- that is ever updated. Note: with the app's publishable key these lists are readable by anyone who has the APK.
+
+create table if not exists public.profiles (
+  id text primary key, name text not null, avatar int not null default 0, photo_url text,
+  updated_at timestamptz not null default now()
+);
+
+create table if not exists public.profile_titles (
+  profile_id text not null references public.profiles(id) on delete cascade,
+  title_id bigint not null,
+  watched boolean not null default false, watched_at timestamptz,
+  interested boolean not null default false,
+  prog_season int, prog_episode int, prog_at timestamptz,
+  updated_at timestamptz not null default now(),    -- newest change wins when a device merges
+  primary key (profile_id, title_id)
+);
+
+create table if not exists public.profile_events (
+  id bigserial primary key,
+  profile_id text not null,
+  kind text not null check (kind in ('profile', 'delete_profile', 'watched', 'interested', 'progress')),
+  title_id bigint,
+  value jsonb not null default '{}',
+  device text,
+  created_at timestamptz not null default now()
+);
+
+alter table public.profiles enable row level security;
+alter table public.profile_titles enable row level security;
+alter table public.profile_events enable row level security;
+drop policy if exists "read profiles" on public.profiles;
+drop policy if exists "read profile titles" on public.profile_titles;
+drop policy if exists "send events" on public.profile_events;
+create policy "read profiles" on public.profiles for select to anon using (true);
+create policy "read profile titles" on public.profile_titles for select to anon using (true);
+create policy "send events" on public.profile_events for insert to anon with check (true);
+grant select on public.profiles, public.profile_titles to anon;
+grant insert on public.profile_events to anon;
+grant usage on sequence public.profile_events_id_seq to anon;

@@ -96,6 +96,8 @@ class MainActivity : AppCompatActivity(), Updater.Listener {
                 val text = CatalogueSource.fetch()
                 val lib = withContext(Dispatchers.IO) { libraryStore.saveCatalogue(text) }
                 repository.replaceLibrary(lib)
+                // Profiles too: send this TV's changes and fetch the Master's (a failure here leaves the cache as it is).
+                runCatching { repository.syncProfiles() }
                 libraryLine(lib.titles.size, lib.exportedAt)
             }.getOrElse { getString(R.string.import_failed, it.message ?: "no connection", before) }
             settings = settings.copy(importEnabled = true, libraryStatus = line)

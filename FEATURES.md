@@ -22,3 +22,4 @@ Status: **Shipped** (in a published build) Â· **Kept** (wanted, not built yet) Â
 | Real service, IMDb and Rotten Tomatoes logos | Shipped | b10 | Converted from the Mac app's icons (`ui/components/Logos.kt`). |
 | Watch now, Trailer and links open the TV apps | Shipped | b10 | JustWatch links; a note shows when no app takes the link. |
 | Mac upkeep tools on the TV (Review, Database, sync, Add/Edit title) | Dropped | | Prince 2026-11-26: upkeep stays on the Mac. |
+| Profiles (Who's watching, avatar in the header, profile page, add/edit/delete, own Watched and Interested) | Shipped | b10 | Built-in avatars, no sign-in. Synced through Supabase (profile_events inbox) into the Master by the Mac upkeeper from b11; newest change wins. Device photos: later. |

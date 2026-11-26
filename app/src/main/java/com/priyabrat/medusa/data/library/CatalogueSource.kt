@@ -38,6 +38,9 @@ object CatalogueSource {
             .toString()
     }
 
+    /** A GET against the project's REST API with the publishable key (also used by ProfileSync). */
+    fun getPath(path: String): String = get(path)
+
     private fun get(path: String): String {
         val c = URL("${BuildConfig.SUPABASE_URL.trimEnd('/')}/rest/v1/$path").openConnection() as HttpURLConnection
         try {

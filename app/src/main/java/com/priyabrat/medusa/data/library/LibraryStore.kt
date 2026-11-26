@@ -59,6 +59,23 @@ class LibraryStore(context: Context) {
 
     fun deleteChanges(profile: String) { File(dir, "changes-$profile.json").delete() }
 
+    private val outboxFile = File(dir, "outbox.json")
+    private val serverFile = File(dir, "profiles-server.json")
+
+    /** Profile changes not yet sent to Supabase, oldest first. */
+    fun loadOutbox(): List<ProfileEvent> = runCatching {
+        if (!outboxFile.exists()) return emptyList()
+        val a = JSONArray(outboxFile.readText())
+        (0 until a.length()).map { ProfileEvent.fromJson(a.getJSONObject(it)) }
+    }.getOrDefault(emptyList())
+
+    fun saveOutbox(events: List<ProfileEvent>) = writeAtomic(outboxFile, JSONArray().also { a -> events.forEach { a.put(it.toJson()) } }.toString())
+
+    /** The last profiles download from Supabase (the cache the TV starts from when offline). */
+    fun loadServerProfiles(): ServerProfiles? = runCatching { if (serverFile.exists()) ServerProfiles.parse(serverFile.readText()) else null }.getOrNull()
+
+    fun saveServerProfiles(text: String) = writeAtomic(serverFile, text)
+
     private fun writeAtomic(f: File, text: String) {
         val tmp = File(dir, f.name + ".tmp")
         tmp.writeText(text)
@@ -74,6 +91,8 @@ data class Changes(
     val progress: Map<Int, Progress> = emptyMap(),
     /** Carousel picks shown lately, newest first (the Mac's tn-shown), so the same few don't keep coming back. */
     val shown: List<Int> = emptyList(),
+    /** When this TV last changed each title (ISO instant); newer than the server's row means the TV's value wins. */
+    val stamps: Map<Int, String> = emptyMap(),
 ) {
     data class Progress(val season: Int?, val episode: Int?, val at: String?)
 
@@ -85,6 +104,7 @@ data class Changes(
             progress.forEach { (k, p) -> o.put(k.toString(), JSONArray().put(p.season ?: 0).put(p.episode ?: 0).put(p.at ?: "")) }
         })
         .put("shown", JSONArray().also { a -> shown.forEach { a.put(it) } })
+        .put("stamps", JSONObject().also { o -> stamps.forEach { (k, v) -> o.put(k.toString(), v) } })
 
     companion object {
         fun fromJson(o: JSONObject): Changes {
@@ -105,7 +125,9 @@ data class Changes(
             }
             val shown = ArrayList<Int>()
             o.optJSONArray("shown")?.let { a -> for (i in 0 until a.length()) shown.add(a.optInt(i)) }
-            return Changes(bools("watched"), at, bools("interested"), prog, shown)
+            val stamps = HashMap<Int, String>()
+            o.optJSONObject("stamps")?.let { j -> j.keys().forEach { key -> key.toIntOrNull()?.let { stamps[it] = j.optString(key) } } }
+            return Changes(bools("watched"), at, bools("interested"), prog, shown, stamps)
         }
     }
 }

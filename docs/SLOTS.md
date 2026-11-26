@@ -27,6 +27,7 @@ Horror year walls are the horror films of each of the last six years, best revie
 | `WatchOption.url` | Opens the service's app | `app_titles.watch[].url` (JustWatch) |
 | `TitleDetail.links[]` (`Link`) | TMDB, IMDb, Where to watch | ids in `app_titles` |
 | `TitleDetail.trailerUrl`, `HeroPick.trailerId` | Trailer | `app_titles.trailer_key` |
+| `ProfilesUiState`, `ProfileTile.*`, `ProfilePageState.*` | Who's watching, header avatar, a profile's page and lists | `profiles.json` on the TV, merged with Supabase `profiles` / `profile_titles` (written only by the Mac upkeeper from the Master) |
 | `settings.libraryStatus`, `.importLabel`, `.importEnabled` | Catalogue size, last update, Refresh button | `MainActivity` (catalogue cache) |
 
 ## Shared pieces

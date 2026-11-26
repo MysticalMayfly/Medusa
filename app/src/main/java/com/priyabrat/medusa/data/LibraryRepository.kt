@@ -15,6 +15,10 @@ import com.priyabrat.medusa.data.library.LibraryStore
 import com.priyabrat.medusa.data.library.Offer
 import com.priyabrat.medusa.data.library.Profile
 import com.priyabrat.medusa.data.library.Profiles
+import com.priyabrat.medusa.data.library.ProfileEvent
+import com.priyabrat.medusa.data.library.ProfileSync
+import com.priyabrat.medusa.data.library.ServerProfiles
+import org.json.JSONObject
 import com.priyabrat.medusa.data.library.Service
 import com.priyabrat.medusa.data.library.Title
 import com.priyabrat.medusa.ui.model.BrowseKind
@@ -796,6 +800,55 @@ class LibraryRepository(private val store: LibraryStore) : MedusaRepository {
 
     private fun save() { val c = changes.value; val who = profilesFlow.value.current.id; io.launch { store.saveChanges(who, c) } }
 
+    // ================================================================ profile sync (data/library/ProfileSync.kt)
+
+    private val outboxLock = Any()
+
+    /** Records one change for the central database: stamped locally, queued, and sent when the TV is online. */
+    private fun record(profile: String, kind: String, titleId: Int?, value: JSONObject) {
+        val e = ProfileEvent(profile, kind, titleId, value, ProfileEvent.now())
+        if (titleId != null && profile == profilesFlow.value.current.id) changes.update { it.copy(stamps = it.stamps + (titleId to e.createdAt)) }
+        io.launch {
+            synchronized(outboxLock) { store.saveOutbox(store.loadOutbox() + e) }
+            flush()
+        }
+    }
+
+    private fun flush() {
+        synchronized(outboxLock) {
+            val pending = store.loadOutbox()
+            if (pending.isNotEmpty() && ProfileSync.send(pending)) store.saveOutbox(emptyList())
+        }
+    }
+
+    /**
+     * Sends what is waiting, downloads the profiles from Supabase, and merges them into the TV's cache: the Master's
+     * rows, with this TV's newer changes on top. Profiles made on another device appear; ones deleted elsewhere go.
+     */
+    suspend fun syncProfiles() = kotlinx.coroutines.withContext(Dispatchers.IO) {
+        flush()
+        val text = ProfileSync.fetch()
+        val server = ServerProfiles.parse(text)
+        store.saveServerProfiles(text)
+        val ps = profilesFlow.value
+        val pending = synchronized(outboxLock) { store.loadOutbox() }
+        val waiting = pending.filter { it.kind == "profile" }.map { it.profile }.toSet()
+        val gone = pending.filter { it.kind == "delete_profile" }.map { it.profile }.toSet()
+        // The Master's list, plus profiles made here that it hasn't seen yet; never one deleted here.
+        val list = (server.profiles.map { sp -> ps.list.firstOrNull { it.id == sp.id && it.id in waiting } ?: sp } +
+            ps.list.filter { p -> server.profiles.none { it.id == p.id } && p.id in waiting }).filter { it.id !in gone }
+        if (list.isEmpty()) return@withContext
+        val active = if (list.any { it.id == ps.active }) ps.active else list.first().id
+        // Save what is on screen before merging into the files.
+        store.saveChanges(ps.current.id, changes.value)
+        for (p in list) store.saveChanges(p.id, ProfileSync.merge(store.loadChanges(p.id), server.rows[p.id] ?: emptyList()))
+        val next = Profiles(list, active)
+        store.saveProfiles(next)
+        if (active != ps.current.id) { synchronized(rounds) { rounds.clear() }; keep.clear() }
+        changes.value = store.loadChanges(active)
+        profilesFlow.value = next
+    }
+
     // ================================================================ profiles
 
     private fun tile(p: Profile, ps: Profiles) = ProfileTile(p.id, p.name, p.avatar, p.id == ps.current.id)
@@ -840,12 +893,14 @@ class LibraryRepository(private val store: LibraryStore) : MedusaRepository {
     override fun saveProfile(id: String?, name: String, avatar: Int): String {
         val ps = profilesFlow.value
         val clean = name.trim().ifEmpty { "Profile" }.take(20)
-        val newId = id ?: "p" + ((ps.list.mapNotNull { it.id.removePrefix("p").toIntOrNull() }.maxOrNull() ?: 0) + 1)
+        // New profiles get a random id, so two devices never make the same one.
+        val newId = id ?: ("p" + java.util.UUID.randomUUID().toString().replace("-", "").take(10))
         val list = if (ps.list.any { it.id == newId }) ps.list.map { if (it.id == newId) it.copy(name = clean, avatar = avatar) else it }
         else ps.list + Profile(newId, clean, avatar)
         val next = ps.copy(list = list)
         profilesFlow.value = next
         io.launch { store.saveProfiles(next) }
+        record(newId, "profile", null, JSONObject().put("name", clean).put("avatar", avatar))
         return newId
     }
 
@@ -855,6 +910,7 @@ class LibraryRepository(private val store: LibraryStore) : MedusaRepository {
         val list = ps.list.filter { it.id != id }
         val wasCurrent = ps.current.id == id
         val next = Profiles(list, if (wasCurrent) list.first().id else ps.active)
+        record(id, "delete_profile", null, JSONObject())
         io.launch {
             store.saveProfiles(next)
             store.deleteChanges(id)
@@ -870,13 +926,16 @@ class LibraryRepository(private val store: LibraryStore) : MedusaRepository {
     override fun setInterested(id: String, on: Boolean) {
         val n = id.toIntOrNull() ?: return
         changes.update { it.copy(interested = it.interested + (n to on)) }
+        record(profilesFlow.value.current.id, "interested", n, JSONObject().put("on", on))
         save()
     }
 
     override fun setWatched(id: String, on: Boolean) {
         val n = id.toIntOrNull() ?: return
         if (on) keep.add(n)
-        changes.update { it.copy(watched = it.watched + (n to on), watchedAt = if (on) it.watchedAt + (n to now()) else it.watchedAt - n) }
+        val at = ProfileEvent.now()
+        changes.update { it.copy(watched = it.watched + (n to on), watchedAt = if (on) it.watchedAt + (n to at) else it.watchedAt - n) }
+        record(profilesFlow.value.current.id, "watched", n, JSONObject().put("on", on).put("at", at))
         save()
     }
 
@@ -898,6 +957,8 @@ class LibraryRepository(private val store: LibraryStore) : MedusaRepository {
             if (done) c = c.copy(watched = c.watched + (n to true), watchedAt = c.watchedAt + (n to now()))
             c
         }
+        record(profilesFlow.value.current.id, "progress", n, JSONObject().put("season", s).put("episode", e).put("at", ProfileEvent.now()))
+        if (done) record(profilesFlow.value.current.id, "watched", n, JSONObject().put("on", true).put("at", ProfileEvent.now()))
         save()
     }
 
