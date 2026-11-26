@@ -127,7 +127,7 @@ fun WhoIsWatchingScreen(state: ProfilesUiState, onPick: (String) -> Unit, onAdd:
             state.profiles.forEachIndexed { i, p ->
                 AvatarTile(p.name, p.avatar, 96.dp, { onPick(p.id) }, if (i == 0) Modifier.focusRequester(first) else Modifier, photoUrl = p.photoUrl)
             }
-            if (state.profiles.size < 6) AvatarTile("", 0, 96.dp, onAdd, label = "Add profile", add = true)
+            if (state.profiles.size < 6) AvatarTile("", 0, 96.dp, onAdd, if (state.profiles.isEmpty()) Modifier.focusRequester(first) else Modifier, label = "Add Google account", add = true)
         }
     }
     LaunchedEffect(state.profiles.size) { runCatching { first.requestFocus() } }
@@ -136,7 +136,6 @@ fun WhoIsWatchingScreen(state: ProfilesUiState, onPick: (String) -> Unit, onAdd:
 class ProfileActions(
     val onOpen: (String) -> Unit,
     val onSwitch: (String) -> Unit,
-    val onEdit: (String) -> Unit,
     val onAllProfiles: () -> Unit,
     /** Signs this profile in with Google (null when the build has no Google sign-in). */
     val onGoogle: ((String) -> Unit)? = null,
@@ -165,10 +164,9 @@ fun ProfileScreen(state: ProfilePageState, actions: ProfileActions, header: @Com
                     state.google?.let { Text(it, style = MedusaType.Small) }
                     Row(Modifier.padding(top = Dimens.Gap8), horizontalArrangement = Arrangement.spacedBy(Dimens.Gap8)) {
                         if (!state.active) Pill("Switch to ${state.name}", { actions.onSwitch(state.id) }, Modifier.focusRequester(firstButton), style = PillStyle.Primary)
-                        Pill("Edit profile", { actions.onEdit(state.id) }, if (state.active) Modifier.focusRequester(firstButton) else Modifier)
-                        Pill("All profiles", actions.onAllProfiles)
-                        // Signing out is in Edit profile, away from the everyday buttons.
+                        Pill("All profiles", actions.onAllProfiles, if (state.active) Modifier.focusRequester(firstButton) else Modifier)
                         actions.onGoogle?.let { google -> if (state.google == null) Pill("Sign in with Google", { google(state.id) }) }
+                        if (state.google != null) Pill("Sign out of Google", { actions.onGoogleSignOut(state.id) })
                     }
                 }
             }
@@ -183,69 +181,4 @@ fun ProfileScreen(state: ProfilePageState, actions: ProfileActions, header: @Com
             Text("Nothing yet. Mark titles Interested or Watched and they show up here.", style = MedusaType.Body, modifier = Modifier.padding(horizontal = Dimens.SafeH))
         }
     }
-}
-
-/** Add or edit a profile: a name typed with the remote's keyboard, and one of the avatars. */
-@Composable
-fun ProfileEditDialog(
-    start: ProfileTile?,
-    canDelete: Boolean,
-    onSave: (String, Int) -> Unit,
-    onDelete: () -> Unit,
-    onDismiss: () -> Unit,
-    onGoogleSignOut: (() -> Unit)? = null,
-) {
-    var name by remember { mutableStateOf(start?.name ?: "") }
-    var avatar by remember { mutableIntStateOf(start?.avatar ?: 1) }
-    var sure by remember { mutableStateOf(false) }
-    val field = remember { FocusRequester() }
-    Dialog(onDismissRequest = onDismiss) {
-        Column(
-            Modifier.width(460.dp).clip(Shapes.Card).background(MedusaColors.Panel).border(1.dp, MedusaColors.Line2, Shapes.Card).padding(Dimens.Gap22),
-            verticalArrangement = Arrangement.spacedBy(Dimens.Gap16),
-        ) {
-            Text(if (start == null) "Add profile" else "Edit profile", style = MedusaType.PanelTitle)
-            val source = remember { MutableInteractionSource() }
-            val focused by source.collectIsFocusedAsState()
-            val fm = LocalFocusManager.current
-            Box(
-                Modifier.fillMaxWidth().focusRing(focused, offset = 2.dp).clip(Shapes.Pill).background(MedusaColors.Surface)
-                    .border(1.dp, if (focused) MedusaColors.Fg else MedusaColors.Line, Shapes.Pill).padding(horizontal = 14.dp, vertical = 9.dp),
-            ) {
-                if (name.isEmpty()) Text("Name", style = MedusaType.Body, color = MedusaColors.Faint)
-                BasicTextField(
-                    value = name,
-                    onValueChange = { name = it.take(20) },
-                    singleLine = true,
-                    textStyle = MedusaType.BodyStrong,
-                    cursorBrush = SolidColor(MedusaColors.Fg),
-                    interactionSource = source,
-                    modifier = Modifier.fillMaxWidth().focusRequester(field).onPreviewKeyEvent {
-                        if (it.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
-                        when (it.key) {
-                            Key.DirectionDown -> fm.moveFocus(FocusDirection.Down)
-                            Key.DirectionUp -> fm.moveFocus(FocusDirection.Up)
-                            else -> false
-                        }
-                    },
-                )
-            }
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                for (i in 0 until AVATAR_COUNT) {
-                    val f = rememberFocusable()
-                    Box(
-                        Modifier.focusRing(f.focused.value || i == avatar, radius = 20.dp, width = if (i == avatar) 3.dp else 2.dp)
-                            .tvClick(f) { avatar = i },
-                    ) { Avatar(i, name.ifEmpty { "?" }, 40.dp) }
-                }
-            }
-            Row(horizontalArrangement = Arrangement.spacedBy(Dimens.Gap8)) {
-                Pill("Save", { onSave(name, avatar) }, style = PillStyle.Primary, enabled = name.isNotBlank())
-                Pill("Cancel", onDismiss)
-                if (canDelete) Pill(if (sure) "Press again to delete" else "Delete profile", { if (sure) onDelete() else sure = true })
-                onGoogleSignOut?.let { Pill("Sign out of Google", it) }
-            }
-        }
-    }
-    LaunchedEffect(Unit) { runCatching { field.requestFocus() } }
 }

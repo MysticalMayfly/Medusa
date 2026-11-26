@@ -11,7 +11,20 @@ import org.json.JSONObject
 data class Profile(val id: String, val name: String, val avatar: Int, val photoUrl: String? = null)
 
 data class Profiles(val list: List<Profile>, val active: String) {
-    val current: Profile get() = list.firstOrNull { it.id == active } ?: list.first()
+    val current: Profile get() = list.firstOrNull { it.id == active } ?: list.firstOrNull() ?: SIGNED_OUT
+
+    fun withoutLocal(id: String): Profiles {
+        val remaining = list.filterNot { it.id == id }
+        return Profiles(remaining, if (active == id) remaining.firstOrNull()?.id ?: "" else active)
+    }
+
+    fun withSelected(profile: Profile): Profiles {
+        val updated = if (list.any { it.id == profile.id }) list.map { if (it.id == profile.id) profile else it } else list + profile
+        return Profiles(updated, profile.id)
+    }
+
+    fun refreshVisible(server: List<Profile>, pending: Set<String>, deleted: Set<String>): List<Profile> =
+        list.map { p -> if (p.id in pending) p else server.firstOrNull { it.id == p.id } ?: p }.filterNot { it.id in deleted }
 
     fun toJson(): JSONObject = JSONObject()
         .put("active", active)
@@ -20,14 +33,15 @@ data class Profiles(val list: List<Profile>, val active: String) {
         })
 
     companion object {
-        val DEFAULT = Profiles(listOf(Profile("p1", "Me", 0)), "p1")
+        val DEFAULT = Profiles(emptyList(), "")
+        val SIGNED_OUT = Profile("__signed_out__", "", 0)
 
         fun fromJson(o: JSONObject): Profiles {
             val a = o.optJSONArray("profiles") ?: return DEFAULT
             val list = (0 until a.length()).mapNotNull { i ->
                 a.optJSONObject(i)?.let { Profile(it.optString("id"), it.optString("name"), it.optInt("avatar"), if (it.isNull("photo_url")) null else it.optString("photo_url").ifEmpty { null }) }
             }.filter { it.id.isNotEmpty() }
-            return if (list.isEmpty()) DEFAULT else Profiles(list, o.optString("active").ifEmpty { list.first().id })
+            return Profiles(list, o.optString("active").ifEmpty { list.firstOrNull()?.id ?: "" })
         }
     }
 }

@@ -6,6 +6,8 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.activity.compose.setContent
 import androidx.appcompat.app.AppCompatActivity
+import androidx.credentials.exceptions.GetCredentialCancellationException
+import androidx.credentials.exceptions.NoCredentialException
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -42,7 +44,7 @@ class MainActivity : AppCompatActivity(), Updater.Listener {
 
     /** Your library, imported once from the Mac (Settings > Import library from Mac); screens stay the same. */
     private val libraryStore by lazy { LibraryStore(applicationContext) }
-    private val repository by lazy { LibraryRepository(libraryStore).also { r -> r.googleEmail = { GoogleAccount.email(applicationContext, it) } } }
+    private val repository by lazy { LibraryRepository(libraryStore).also { r -> r.googleSignedIn = { GoogleAccount.isSignedIn(applicationContext, it) } } }
 
     private var settings by mutableStateOf(
         SettingsUiState(version = "", status = "", buttonLabel = "", buttonEnabled = true, progressPercent = null, updateWaiting = false),
@@ -83,7 +85,7 @@ class MainActivity : AppCompatActivity(), Updater.Listener {
                         onUpdateButton = { updater.onButtonPressed() },
                         onImportButton = ::refreshCatalogue,
                         onQuit = { introPlayed = false; finishAndRemoveTask() },
-                        onGoogleSignIn = if (google.configured) ::signInWithGoogle else null,
+                        onGoogleSignIn = ::signInWithGoogle,
                         onGoogleSignOut = ::signOutOfGoogle,
                     )
                     if (booting) BootScreen(showApp = { appShown = true }, onDone = { booting = false; introPlayed = true })
@@ -97,23 +99,37 @@ class MainActivity : AppCompatActivity(), Updater.Listener {
 
     private val google by lazy { GoogleAccount(this) }
 
-    /** Profile page > Sign in with Google: the TV's account picker, then the profile takes the account's name and picture. */
-    private fun signInWithGoogle(profile: String) {
+    /** Add or restore a Google account, or link an already-migrated legacy profile. */
+    private fun signInWithGoogle(profile: String?, onDone: () -> Unit) {
         lifecycleScope.launch {
-            val r = runCatching { google.signIn(this@MainActivity) }
+            val r = runCatching {
+                val account = google.signIn(this@MainActivity)
+                val id = google.resolveProfile(account, profile)
+                GoogleAccount.save(applicationContext, id, account)
+                val synced = repository.useGoogleProfile(id, account.name, account.photoUrl)
+                account.name to synced
+            }
             r.onSuccess {
-                GoogleAccount.save(applicationContext, profile, it)
-                repository.linkGoogle(profile, it.name, it.photoUrl)
-                android.widget.Toast.makeText(this@MainActivity, getString(R.string.google_signed_in, it.name), android.widget.Toast.LENGTH_SHORT).show()
+                val message = if (it.second) getString(R.string.google_signed_in, it.first)
+                    else "Signed in, but profile history could not be refreshed yet."
+                android.widget.Toast.makeText(this@MainActivity, message, android.widget.Toast.LENGTH_SHORT).show()
+                onDone()
             }.onFailure {
-                android.widget.Toast.makeText(this@MainActivity, getString(R.string.google_failed, it.message ?: it.javaClass.simpleName), android.widget.Toast.LENGTH_LONG).show()
+                if (it !is GetCredentialCancellationException) {
+                    val reason = if (it is NoCredentialException) "Add a Google account in your TV settings and try again."
+                        else it.message ?: it.javaClass.simpleName
+                    android.widget.Toast.makeText(this@MainActivity, getString(R.string.google_failed, reason), android.widget.Toast.LENGTH_LONG).show()
+                }
             }
         }
     }
 
-    private fun signOutOfGoogle(profile: String) {
-        GoogleAccount.signOut(applicationContext, profile)
-        repository.unlinkGoogle(profile)
+    private fun signOutOfGoogle(profile: String, onDone: () -> Unit) {
+        lifecycleScope.launch {
+            repository.removeLocalProfile(profile)
+            GoogleAccount.signOut(applicationContext, profile)
+            onDone()
+        }
     }
 
     private fun libraryLine(count: Int, fetchedAt: String): String {

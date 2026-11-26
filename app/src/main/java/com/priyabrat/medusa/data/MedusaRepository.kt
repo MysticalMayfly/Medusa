@@ -38,12 +38,6 @@ interface MedusaRepository {
     fun profilePage(id: String): Flow<ProfilePageState>
     /** Watched, Interested and progress follow the profile in use. */
     fun switchProfile(id: String)
-    /** Adds a profile (id null) or changes one; returns its id. */
-    fun saveProfile(id: String?, name: String, avatar: Int): String
-    fun deleteProfile(id: String)
-    /** After Google sign-in: the profile takes the account's name and picture (null photo keeps the avatar). */
-    fun linkGoogle(id: String, name: String, photoUrl: String?)
-    fun unlinkGoogle(id: String)
 
     /** Pick one option in a filter group, e.g. screen "movies", group "platform", option "p2". */
     fun selectFilter(screen: String, group: String, optionId: String)

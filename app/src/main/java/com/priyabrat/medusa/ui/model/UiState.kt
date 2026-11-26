@@ -243,6 +243,7 @@ const val AVATAR_COUNT = 8
 data class ProfilesUiState(
     val profiles: List<ProfileTile> = emptyList(),
     val current: ProfileTile? = null,
+    val ready: Boolean = false,
 )
 
 /** One profile's page: its Interested and Watched lists. */

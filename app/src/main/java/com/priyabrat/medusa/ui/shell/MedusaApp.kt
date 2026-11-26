@@ -37,7 +37,6 @@ import com.priyabrat.medusa.ui.model.HorrorUiState
 import com.priyabrat.medusa.ui.model.ProfilePageState
 import com.priyabrat.medusa.ui.model.ProfilesUiState
 import com.priyabrat.medusa.ui.profiles.ProfileActions
-import com.priyabrat.medusa.ui.profiles.ProfileEditDialog
 import com.priyabrat.medusa.ui.profiles.ProfileScreen
 import com.priyabrat.medusa.ui.profiles.WhoIsWatchingScreen
 import com.priyabrat.medusa.ui.model.SearchUiState
@@ -76,8 +75,8 @@ fun MedusaApp(
     onUpdateButton: () -> Unit,
     onImportButton: () -> Unit,
     onQuit: () -> Unit,
-    onGoogleSignIn: ((String) -> Unit)? = null,
-    onGoogleSignOut: (String) -> Unit = {},
+    onGoogleSignIn: ((String?, () -> Unit) -> Unit)? = null,
+    onGoogleSignOut: (String, () -> Unit) -> Unit = { _, done -> done() },
 ) {
     val stack = remember { mutableStateListOf<Screen>(Screen.Top(Tab.Home)) }
     val screen = stack.last()
@@ -90,7 +89,6 @@ fun MedusaApp(
     // The carousel's main button: where Down from the top menu goes on pages that have a carousel.
     val heroEntry = remember { FocusRequester() }
     val profiles by remember(repo) { repo.profiles() }.collectAsState(ProfilesUiState())
-    var editing by remember { mutableStateOf<String?>(null) }    // profile id, or NEW_PROFILE
 
     fun go(to: Screen) {
         if (to is Screen.Top) { stack.clear(); stack.add(to) } else if (stack.last() != to) stack.add(to)
@@ -106,6 +104,7 @@ fun MedusaApp(
     val exitHint = androidx.compose.ui.res.stringResource(com.priyabrat.medusa.R.string.back_again_to_exit)
     BackHandler(enabled = true) {
         when {
+            screen == Screen.Profiles && profiles.ready && profiles.current == null -> activity?.moveTaskToBack(true)
             stack.size > 1 -> stack.removeAt(stack.lastIndex)
             screen != Screen.Top(Tab.Home) -> go(Screen.Top(Tab.Home))
             System.currentTimeMillis() - exitArmedAt < EXIT_WINDOW_MS -> { exitArmedAt = 0L; activity?.moveTaskToBack(true) }
@@ -229,7 +228,7 @@ fun MedusaApp(
                 Screen.Profiles -> WhoIsWatchingScreen(
                     profiles,
                     onPick = { repo.switchProfile(it); go(Screen.Top(Tab.Home)) },
-                    onAdd = { editing = NEW_PROFILE },
+                    onAdd = { onGoogleSignIn?.invoke(null) { go(Screen.Top(Tab.Home)) } },
                 )
                 is Screen.Profile -> {
                     val state by remember(s.id) { repo.profilePage(s.id) }.collectAsState(ProfilePageState(s.id))
@@ -237,28 +236,15 @@ fun MedusaApp(
                         ProfileActions(
                             onOpen = open,
                             onSwitch = { repo.switchProfile(it) },
-                            onEdit = { editing = it },
                             onAllProfiles = { go(Screen.Profiles) },
-                            onGoogle = onGoogleSignIn,
-                            onGoogleSignOut = onGoogleSignOut,
+                            onGoogle = onGoogleSignIn?.let { signIn -> { id -> signIn(id) { go(Screen.Top(Tab.Home)) } } },
+                            onGoogleSignOut = { id -> onGoogleSignOut(id) { go(Screen.Profiles) } },
                         )
                     }
                     ProfileScreen(state, actions, header)
                 }
             }
             toast.Host()
-        }
-
-        editing?.let { id ->
-            val start = profiles.profiles.firstOrNull { it.id == id }
-            ProfileEditDialog(
-                start = start,
-                canDelete = start != null && profiles.profiles.size > 1,
-                onSave = { name, avatar -> repo.saveProfile(start?.id, name, avatar); editing = null },
-                onDelete = { repo.deleteProfile(id); editing = null; go(Screen.Profiles) },
-                onDismiss = { editing = null },
-                onGoogleSignOut = start?.photoUrl?.let { { onGoogleSignOut(id); editing = null } },
-            )
         }
 
         panelId?.let { id ->
@@ -272,8 +258,9 @@ fun MedusaApp(
     }
 
     // "Who's watching?" once per launch, when there is more than one profile.
-    LaunchedEffect(profiles.profiles.size) {
-        if (!Session.askedWho && profiles.profiles.size > 1) { Session.askedWho = true; go(Screen.Profiles) }
+    LaunchedEffect(profiles.ready, profiles.profiles.size) {
+        if (profiles.ready && profiles.profiles.isEmpty()) go(Screen.Profiles)
+        else if (profiles.ready && !Session.askedWho && profiles.profiles.size > 1) { Session.askedWho = true; go(Screen.Profiles) }
     }
 
     // Put focus somewhere sensible whenever the screen changes (the old screen's focused element is gone).
@@ -289,7 +276,6 @@ fun MedusaApp(
         }
     }}
 
-private const val NEW_PROFILE = "new"
 private const val EXIT_WINDOW_MS = 2_500L
 
 /** Things asked once per app process, not once per screen (coming back to Medusa doesn't ask again). */

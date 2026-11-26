@@ -10,6 +10,7 @@ import com.priyabrat.medusa.BuildConfig
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
+import org.json.JSONArray
 import java.net.HttpURLConnection
 import java.net.URL
 import java.security.MessageDigest
@@ -52,6 +53,44 @@ class GoogleAccount(private val context: Context) {
         )
     }
 
+    /** Resolve this authenticated user to the same profile on every device. */
+    suspend fun resolveProfile(r: Result, existingProfile: String? = null): String = withContext(Dispatchers.IO) {
+        fun request(method: String, path: String, body: String? = null): Pair<Int, String> {
+            val c = URL("${BuildConfig.SUPABASE_URL.trimEnd('/')}/rest/v1/$path").openConnection() as HttpURLConnection
+            try {
+                c.requestMethod = method
+                c.connectTimeout = 10_000
+                c.readTimeout = 20_000
+                c.setRequestProperty("apikey", BuildConfig.SUPABASE_KEY)
+                c.setRequestProperty("Authorization", "Bearer ${r.accessToken}")
+                c.setRequestProperty("Content-Type", "application/json")
+                if (body != null) {
+                    c.doOutput = true
+                    c.outputStream.use { it.write(body.toByteArray()) }
+                }
+                val status = c.responseCode
+                val stream = if (status in 200..299) c.inputStream else c.errorStream
+                return status to (stream?.bufferedReader()?.use { it.readText() } ?: "")
+            } finally { c.disconnect() }
+        }
+        fun lookup(): String? {
+            val (status, body) = request("GET", "account_profile_links?select=profile_id&user_id=eq.${r.userId}")
+            check(status in 200..299) { "Could not load the account's profile ($status)" }
+            val rows = JSONArray(body)
+            return if (rows.length() == 0) null else rows.getJSONObject(0).getString("profile_id")
+        }
+        lookup()?.let {
+            check(existingProfile == null || existingProfile == it) { "This Google account is linked to a different profile" }
+            return@withContext it
+        }
+        check(existingProfile == null) { "This existing profile needs to be linked before it can use this Google account" }
+        val id = "g" + r.userId.replace("-", "")
+        val (status, _) = request("POST", "account_profile_links", JSONObject().put("user_id", r.userId).put("profile_id", id).toString())
+        if (status == 409) return@withContext checkNotNull(lookup()) { "Could not recover the account's profile" }
+        check(status in 200..299) { "Could not create the account's profile ($status)" }
+        id
+    }
+
     /** Supabase Auth: Google ID token -> session (POST /auth/v1/token?grant_type=id_token). */
     private fun exchange(idToken: String, nonce: String): JSONObject {
         val c = URL("${BuildConfig.SUPABASE_URL.trimEnd('/')}/auth/v1/token?grant_type=id_token").openConnection() as HttpURLConnection
@@ -82,6 +121,8 @@ class GoogleAccount(private val context: Context) {
         }
 
         fun email(context: Context, profile: String): String? = context.getSharedPreferences("google", Context.MODE_PRIVATE).getString("$profile.email", null)
+
+        fun isSignedIn(context: Context, profile: String): Boolean = context.getSharedPreferences("google", Context.MODE_PRIVATE).contains("$profile.user")
 
         fun signOut(context: Context, profile: String) {
             val p = context.getSharedPreferences("google", Context.MODE_PRIVATE)

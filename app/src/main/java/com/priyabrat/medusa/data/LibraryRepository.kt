@@ -62,6 +62,8 @@ import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
@@ -82,9 +84,11 @@ class LibraryRepository(private val store: LibraryStore) : MedusaRepository {
     private val changes = MutableStateFlow(Changes())
     private val filters = MutableStateFlow(Filters())
     private val profilesFlow = MutableStateFlow(Profiles.DEFAULT)
+    private val profilesReady = MutableStateFlow(false)
+    private val profileMutex = Mutex()
 
     /** Titles with your TV changes applied; rebuilt whenever the library or a change moves. */
-    private val snap: Flow<Snap> = combine(library, changes) { lib, ch -> Snap(lib, ch) }
+    private val snap: Flow<Snap> = combine(library, changes, profilesFlow) { lib, ch, ps -> Snap(lib, ch, ps.current.id == "p1") }
 
     /** True once a library is on the TV (Settings shows the import button either way). */
     val hasLibrary: StateFlow<Boolean> get() = _hasLibrary
@@ -95,6 +99,7 @@ class LibraryRepository(private val store: LibraryStore) : MedusaRepository {
             val p = store.loadProfiles()
             profilesFlow.value = p
             changes.value = store.loadChanges(p.current.id)
+            profilesReady.value = true
             val lib = store.loadCatalogue()
             library.value = lib
             _hasLibrary.value = lib.titles.isNotEmpty()
@@ -111,23 +116,23 @@ class LibraryRepository(private val store: LibraryStore) : MedusaRepository {
     // ================================================================ effective titles
 
     /** A title as the screens see it: the imported record with your TV changes on top. */
-    private class T(val r: Title, ch: Changes) {
+    private class T(val r: Title, ch: Changes, legacyProfile: Boolean) {
         val id = r.id
         val sid = r.id.toString()
-        val watched = ch.watched[r.id] ?: r.watched
-        val interested = ch.interested[r.id] ?: r.interested
+        val watched = ch.watched[r.id] ?: (legacyProfile && r.watched)
+        val interested = ch.interested[r.id] ?: (legacyProfile && r.interested)
         private val p = ch.progress[r.id]
-        val progSeason = if (p != null) p.season else r.progSeason
-        val progEpisode = if (p != null) p.episode else r.progEpisode
-        val progAt = if (p != null) p.at else r.progAt
+        val progSeason = if (p != null) p.season else if (legacyProfile) r.progSeason else null
+        val progEpisode = if (p != null) p.episode else if (legacyProfile) r.progEpisode else null
+        val progAt = if (p != null) p.at else if (legacyProfile) r.progAt else null
         val year: Int? = r.years?.takeWhile { it.isDigit() }?.toIntOrNull()
         val isShow = r.type == "show"
         val isMovie = r.type == "movie"
         val horror = "Horror" in r.genres
     }
 
-    private class Snap(val lib: Library, val ch: Changes) {
-        val titles: List<T> = lib.titles.map { T(it, ch) }
+    private class Snap(val lib: Library, val ch: Changes, legacyProfile: Boolean) {
+        val titles: List<T> = lib.titles.map { T(it, ch, legacyProfile) }
         val byId: Map<Int, T> = titles.associateBy { it.id }
         val today: LocalDate = LocalDate.now()
         val thisYear = today.year
@@ -817,7 +822,16 @@ class LibraryRepository(private val store: LibraryStore) : MedusaRepository {
 
     private fun now() = LocalDateTime.now().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME)
 
-    private fun save() { val c = changes.value; val who = profilesFlow.value.current.id; io.launch { store.saveChanges(who, c) } }
+    private fun save() {
+        val who = profilesFlow.value.current.id
+        io.launch {
+            profileMutex.withLock {
+                // A switch saves the outgoing profile under this same lock. Do not let an
+                // older queued write overwrite it after the profile has changed.
+                if (profilesFlow.value.current.id == who) store.saveChanges(who, changes.value)
+            }
+        }
+    }
 
     // ================================================================ profile sync (data/library/ProfileSync.kt)
 
@@ -844,7 +858,7 @@ class LibraryRepository(private val store: LibraryStore) : MedusaRepository {
      * Sends what is waiting, downloads the profiles from Supabase, and merges them into the TV's cache: the Master's
      * rows, with this TV's newer changes on top. Profiles made on another device appear; ones deleted elsewhere go.
      */
-    suspend fun syncProfiles() = kotlinx.coroutines.withContext(Dispatchers.IO) {
+    suspend fun syncProfiles() = kotlinx.coroutines.withContext(Dispatchers.IO) { profileMutex.withLock {
         flush()
         val text = ProfileSync.fetch()
         val server = ServerProfiles.parse(text)
@@ -854,9 +868,9 @@ class LibraryRepository(private val store: LibraryStore) : MedusaRepository {
         val waiting = pending.filter { it.kind == "profile" }.map { it.profile }.toSet()
         val gone = pending.filter { it.kind == "delete_profile" }.map { it.profile }.toSet()
         // The Master's list, plus profiles made here that it hasn't seen yet; never one deleted here.
-        val list = (server.profiles.map { sp -> ps.list.firstOrNull { it.id == sp.id && it.id in waiting } ?: sp } +
-            ps.list.filter { p -> server.profiles.none { it.id == p.id } && p.id in waiting }).filter { it.id !in gone }
-        if (list.isEmpty()) return@withContext
+        // Only accounts signed in on this device appear here; cloud profiles must not reappear after logout.
+        val list = ps.refreshVisible(server.profiles, waiting, gone)
+        if (list.isEmpty()) return@withLock
         val active = if (list.any { it.id == ps.active }) ps.active else list.first().id
         // Save what is on screen before merging into the files.
         store.saveChanges(ps.current.id, changes.value)
@@ -866,30 +880,69 @@ class LibraryRepository(private val store: LibraryStore) : MedusaRepository {
         if (active != ps.current.id) { synchronized(rounds) { rounds.clear() }; keep.clear() }
         changes.value = store.loadChanges(active)
         profilesFlow.value = next
-    }
+    } }
 
     // ================================================================ profiles
 
     private fun tile(p: Profile, ps: Profiles) = ProfileTile(p.id, p.name, p.avatar, p.id == ps.current.id, p.photoUrl)
 
-    /** Set by MainActivity: the Google account a profile is signed in with, if any. */
-    var googleEmail: (String) -> String? = { null }
+    /** Set by MainActivity: whether a profile has a Google session. */
+    var googleSignedIn: (String) -> Boolean = { false }
+    private val googleSessionRevision = MutableStateFlow(0)
 
-    override fun profiles(): Flow<ProfilesUiState> = profilesFlow.map { ps ->
-        ProfilesUiState(ps.list.map { tile(it, ps) }, tile(ps.current, ps))
+    /** Add or restore an account locally without changing or deleting another profile's history. */
+    suspend fun useGoogleProfile(id: String, name: String, photoUrl: String?) = kotlinx.coroutines.withContext(Dispatchers.IO) {
+        profileMutex.withLock {
+            val ps = profilesFlow.value
+            if (ps.list.isNotEmpty()) store.saveChanges(ps.current.id, changes.value)
+            val old = ps.list.firstOrNull { it.id == id }
+            val p = Profile(id, name.trim().ifEmpty { old?.name ?: "Profile" }.take(20), old?.avatar ?: 0, photoUrl)
+            val next = ps.withSelected(p)
+            store.saveProfiles(next)
+            synchronized(rounds) { rounds.clear() }
+            keep.clear()
+            changes.value = store.loadChanges(id)
+            profilesFlow.value = next
+            googleSessionRevision.update { it + 1 }
+            record(id, "profile", null, JSONObject().put("name", p.name).put("avatar", p.avatar).put("photo_url", p.photoUrl ?: JSONObject.NULL))
+        }
+        // Restore the server copy, including on a device that has never seen this account.
+        runCatching { syncProfiles() }.isSuccess
     }
 
-    override fun profilePage(id: String): Flow<ProfilePageState> = combine(library, profilesFlow, changes) { lib, ps, ch ->
+    /** Remove a signed-out profile only from this device; keep its changes and the server records. */
+    suspend fun removeLocalProfile(id: String) = kotlinx.coroutines.withContext(Dispatchers.IO) {
+        profileMutex.withLock {
+            val ps = profilesFlow.value
+            if (ps.list.none { it.id == id }) return@withLock
+            if (ps.current.id == id) store.saveChanges(id, changes.value)
+            val next = ps.withoutLocal(id)
+            store.saveProfiles(next)
+            if (ps.current.id == id) {
+                synchronized(rounds) { rounds.clear() }
+                keep.clear()
+                changes.value = store.loadChanges(next.current.id)
+            }
+            profilesFlow.value = next
+            googleSessionRevision.update { it + 1 }
+        }
+    }
+
+    override fun profiles(): Flow<ProfilesUiState> = combine(profilesFlow, profilesReady) { ps, ready ->
+        ProfilesUiState(ps.list.map { tile(it, ps) }, ps.list.firstOrNull { it.id == ps.current.id }?.let { tile(it, ps) }, ready)
+    }
+
+    override fun profilePage(id: String): Flow<ProfilePageState> = combine(library, profilesFlow, changes, googleSessionRevision) { lib, ps, ch, _ ->
         val p = ps.list.firstOrNull { it.id == id } ?: return@combine ProfilePageState(id)
         // Another profile's lists come from its own file; the one in use from what is on screen now.
         val mine = if (p.id == ps.current.id) ch else store.loadChanges(p.id)
-        val s = Snap(lib, mine)
+        val s = Snap(lib, mine, p.id == "p1")
         val interested = s.titles.filter { it.interested }.sortedWith(byScoreDesc)
         val watched = s.titles.filter { it.watched }.sortedByDescending { mine.watchedAt[it.id] ?: "" }
         val going = s.titles.count { it.isShow && !it.watched && it.progSeason != null }
         ProfilePageState(
             id = p.id, name = p.name, avatar = p.avatar, photoUrl = p.photoUrl,
-            google = googleEmail(p.id)?.let { "Signed in with Google" }, active = p.id == ps.current.id,
+            google = if (googleSignedIn(p.id)) "Signed in with Google" else null, active = p.id == ps.current.id,
             stat = "${watched.size} watched · ${interested.size} interested" + if (going > 0) " · $going show${if (going > 1) "s" else ""} in progress" else "",
             interested = interested.map { shelfCard(it) },
             watched = watched.map { shelfCard(it) },
@@ -897,72 +950,19 @@ class LibraryRepository(private val store: LibraryStore) : MedusaRepository {
     }.flowOn(Dispatchers.IO)
 
     override fun switchProfile(id: String) {
-        val ps = profilesFlow.value
-        if (ps.current.id == id || ps.list.none { it.id == id }) return
-        val before = changes.value
-        val was = ps.current.id
-        val next = ps.copy(active = id)
         io.launch {
-            store.saveChanges(was, before)
-            store.saveProfiles(next)
-            val ch = store.loadChanges(id)
-            synchronized(rounds) { rounds.clear() }
-            keep.clear()
-            changes.value = ch
-            profilesFlow.value = next
-        }
-    }
-
-    override fun saveProfile(id: String?, name: String, avatar: Int): String {
-        val ps = profilesFlow.value
-        val clean = name.trim().ifEmpty { "Profile" }.take(20)
-        // New profiles get a random id, so two devices never make the same one.
-        val newId = id ?: ("p" + java.util.UUID.randomUUID().toString().replace("-", "").take(10))
-        val list = if (ps.list.any { it.id == newId }) ps.list.map { if (it.id == newId) it.copy(name = clean, avatar = avatar) else it }
-        else ps.list + Profile(newId, clean, avatar)
-        val next = ps.copy(list = list)
-        profilesFlow.value = next
-        io.launch { store.saveProfiles(next) }
-        record(newId, "profile", null, JSONObject().put("name", clean).put("avatar", avatar)
-            .put("photo_url", list.firstOrNull { it.id == newId }?.photoUrl ?: JSONObject.NULL))
-        return newId
-    }
-
-    override fun linkGoogle(id: String, name: String, photoUrl: String?) {
-        val ps = profilesFlow.value
-        val p = ps.list.firstOrNull { it.id == id } ?: return
-        val clean = name.trim().ifEmpty { p.name }.take(20)
-        val next = ps.copy(list = ps.list.map { if (it.id == id) it.copy(name = clean, photoUrl = photoUrl) else it })
-        profilesFlow.value = next
-        io.launch { store.saveProfiles(next) }
-        record(id, "profile", null, JSONObject().put("name", clean).put("avatar", p.avatar).put("photo_url", photoUrl ?: JSONObject.NULL))
-    }
-
-    override fun unlinkGoogle(id: String) {
-        val ps = profilesFlow.value
-        val p = ps.list.firstOrNull { it.id == id } ?: return
-        val next = ps.copy(list = ps.list.map { if (it.id == id) it.copy(photoUrl = null) else it })
-        profilesFlow.value = next
-        io.launch { store.saveProfiles(next) }
-        record(id, "profile", null, JSONObject().put("name", p.name).put("avatar", p.avatar).put("photo_url", JSONObject.NULL))
-    }
-
-    override fun deleteProfile(id: String) {
-        val ps = profilesFlow.value
-        if (ps.list.size <= 1 || ps.list.none { it.id == id }) return
-        val list = ps.list.filter { it.id != id }
-        val wasCurrent = ps.current.id == id
-        val next = Profiles(list, if (wasCurrent) list.first().id else ps.active)
-        record(id, "delete_profile", null, JSONObject())
-        io.launch {
-            store.saveProfiles(next)
-            store.deleteChanges(id)
-            if (wasCurrent) {
+            profileMutex.withLock {
+                val ps = profilesFlow.value
+                if (ps.current.id == id || ps.list.none { it.id == id }) return@withLock
+                store.saveChanges(ps.current.id, changes.value)
+                val next = ps.copy(active = id)
+                store.saveProfiles(next)
+                val ch = store.loadChanges(id)
                 synchronized(rounds) { rounds.clear() }
                 keep.clear()
-                changes.value = store.loadChanges(next.active)
+                changes.value = ch
+                profilesFlow.value = next
             }
-            profilesFlow.value = next
         }
     }
 
@@ -986,7 +986,7 @@ class LibraryRepository(private val store: LibraryStore) : MedusaRepository {
     override fun markEpisodeWatched(id: String) {
         val n = id.toIntOrNull() ?: return
         val r = library.value.byId[n] ?: return
-        val t = T(r, changes.value)
+        val t = T(r, changes.value, profilesFlow.value.current.id == "p1")
         val eps = r.episodes
         var s = t.progSeason ?: 0
         var e = t.progEpisode ?: 0
