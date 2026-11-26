@@ -77,6 +77,7 @@ fun MedusaApp(
     onQuit: () -> Unit,
     onGoogleSignIn: ((String?, () -> Unit) -> Unit)? = null,
     onGoogleSignOut: (String, () -> Unit) -> Unit = { _, done -> done() },
+    onGuest: (() -> Unit) -> Unit = { done -> done() },
 ) {
     val stack = remember { mutableStateListOf<Screen>(Screen.Top(Tab.Home)) }
     val screen = stack.last()
@@ -229,6 +230,7 @@ fun MedusaApp(
                     profiles,
                     onPick = { repo.switchProfile(it); go(Screen.Top(Tab.Home)) },
                     onAdd = { onGoogleSignIn?.invoke(null) { go(Screen.Top(Tab.Home)) } },
+                    onGuest = { Session.askedWho = true; onGuest { go(Screen.Top(Tab.Home)) } },
                 )
                 is Screen.Profile -> {
                     val state by remember(s.id) { repo.profilePage(s.id) }.collectAsState(ProfilePageState(s.id))

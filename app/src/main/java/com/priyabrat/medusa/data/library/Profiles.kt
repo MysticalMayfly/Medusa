@@ -23,6 +23,10 @@ data class Profiles(val list: List<Profile>, val active: String) {
         return Profiles(updated, profile.id)
     }
 
+    fun withGuest(): Profiles = withSelected(list.firstOrNull { it.id == GUEST_ID } ?: Profile(GUEST_ID, "Guest", 0))
+
+    fun withoutRetiredProfile(): Profiles = withoutLocal("p01f2b6c399")
+
     fun refreshVisible(server: List<Profile>, pending: Set<String>, deleted: Set<String>): List<Profile> =
         list.map { p -> if (p.id in pending) p else server.firstOrNull { it.id == p.id } ?: p }.filterNot { it.id in deleted }
 
@@ -33,6 +37,7 @@ data class Profiles(val list: List<Profile>, val active: String) {
         })
 
     companion object {
+        const val GUEST_ID = "__local_guest__"
         val DEFAULT = Profiles(emptyList(), "")
         val SIGNED_OUT = Profile("__signed_out__", "", 0)
 

@@ -8,6 +8,7 @@ If that build is then not published, remove its row.
 
 | Build | Version | Date | APK | Changes |
 |---|---|---|---|---|
+| b19 | 1.3 | 2026-11-27 | `medusa-1.3-b19.apk` | New loading screen lines: "Waking the serpents" first, then 52 new curse and horror lines in random order. |
 | b18 | 1.3 | 2026-11-27 | `medusa-1.3-b18.apk` | Add profiles with Google sign-in and sign out from a profile on this TV. Existing linked profile history is retained. |
 | b17 | 1.3 | 2026-11-27 | `medusa-1.3-b17.apk` | Loading messages fade out and in as one continuous sequence, preventing the previous line from flashing back between messages. |
 | b16 | 1.3 | 2026-11-27 | `medusa-1.3-b16.apk` | Quit starts a fresh session when Medusa is reopened. Carousel trailer fades no longer restart on playback updates, allowing the volume to reach its intended level. Loading text stays visible longer and fades between lines. |

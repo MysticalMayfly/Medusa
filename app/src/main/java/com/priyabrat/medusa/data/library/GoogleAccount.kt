@@ -53,6 +53,19 @@ class GoogleAccount(private val context: Context) {
         )
     }
 
+    /** Exchange the Google device-flow ID token without changing nonce settings for other clients. */
+    suspend fun fromDeviceToken(idToken: String, accessToken: String?): Result = withContext(Dispatchers.IO) {
+        val session = exchange(idToken, null, accessToken)
+        val user = session.getJSONObject("user")
+        val metadata = user.optJSONObject("user_metadata") ?: JSONObject()
+        Result(
+            name = metadata.optString("full_name").ifEmpty { metadata.optString("name").ifEmpty { user.optString("email").substringBefore('@') } },
+            photoUrl = metadata.optString("avatar_url").ifEmpty { metadata.optString("picture") }.ifEmpty { null },
+            email = user.optString("email").ifEmpty { null }, userId = user.getString("id"),
+            accessToken = session.getString("access_token"), refreshToken = session.getString("refresh_token"),
+        )
+    }
+
     /** Resolve this authenticated user to the same profile on every device. */
     suspend fun resolveProfile(r: Result, existingProfile: String? = null): String = withContext(Dispatchers.IO) {
         fun request(method: String, path: String, body: String? = null): Pair<Int, String> {
@@ -92,7 +105,7 @@ class GoogleAccount(private val context: Context) {
     }
 
     /** Supabase Auth: Google ID token -> session (POST /auth/v1/token?grant_type=id_token). */
-    private fun exchange(idToken: String, nonce: String): JSONObject {
+    private fun exchange(idToken: String, nonce: String?, googleAccessToken: String? = null): JSONObject {
         val c = URL("${BuildConfig.SUPABASE_URL.trimEnd('/')}/auth/v1/token?grant_type=id_token").openConnection() as HttpURLConnection
         try {
             c.requestMethod = "POST"
@@ -101,7 +114,10 @@ class GoogleAccount(private val context: Context) {
             c.readTimeout = 20_000
             c.setRequestProperty("apikey", BuildConfig.SUPABASE_KEY)
             c.setRequestProperty("Content-Type", "application/json")
-            c.outputStream.use { it.write(JSONObject().put("provider", "google").put("id_token", idToken).put("nonce", nonce).toString().toByteArray()) }
+            val payload = JSONObject().put("provider", "google").put("id_token", idToken)
+            if (nonce != null) payload.put("nonce", nonce)
+            if (googleAccessToken != null) payload.put("access_token", googleAccessToken)
+            c.outputStream.use { it.write(payload.toString().toByteArray()) }
             val ok = c.responseCode in 200..299
             val body = (if (ok) c.inputStream else c.errorStream).bufferedReader().readText()
             check(ok) { "Supabase refused the sign-in (${c.responseCode})" }

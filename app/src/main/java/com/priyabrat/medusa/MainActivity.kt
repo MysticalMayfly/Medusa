@@ -15,6 +15,10 @@ import androidx.lifecycle.lifecycleScope
 import com.priyabrat.medusa.data.LibraryRepository
 import com.priyabrat.medusa.data.library.CatalogueSource
 import com.priyabrat.medusa.data.library.GoogleAccount
+import com.priyabrat.medusa.data.library.TvGoogleSignIn
+import com.priyabrat.medusa.ui.profiles.TvSignInDialog
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.CancellationException
 import com.priyabrat.medusa.data.library.LibraryStore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -41,6 +45,9 @@ class MainActivity : AppCompatActivity(), Updater.Listener {
     }
 
     private lateinit var updater: Updater
+    private var signInVisible by mutableStateOf(false)
+    private var signInChallenge by mutableStateOf<TvGoogleSignIn.Challenge?>(null)
+    private var signInJob: Job? = null
 
     /** Your library, imported once from the Mac (Settings > Import library from Mac); screens stay the same. */
     private val libraryStore by lazy { LibraryStore(applicationContext) }
@@ -87,8 +94,10 @@ class MainActivity : AppCompatActivity(), Updater.Listener {
                         onQuit = { introPlayed = false; finishAndRemoveTask() },
                         onGoogleSignIn = ::signInWithGoogle,
                         onGoogleSignOut = ::signOutOfGoogle,
+                        onGuest = { done -> lifecycleScope.launch { repository.useGuestProfile(); done() } },
                     )
                     if (booting) BootScreen(showApp = { appShown = true }, onDone = { booting = false; introPlayed = true })
+                    if (signInVisible) TvSignInDialog(signInChallenge) { signInJob?.cancel(); signInVisible = false }
                 }
             }
         }
@@ -101,9 +110,15 @@ class MainActivity : AppCompatActivity(), Updater.Listener {
 
     /** Add or restore a Google account, or link an already-migrated legacy profile. */
     private fun signInWithGoogle(profile: String?, onDone: () -> Unit) {
-        lifecycleScope.launch {
+        if (signInJob?.isActive == true) return
+        signInVisible = true
+        signInChallenge = null
+        signInJob = lifecycleScope.launch {
             val r = runCatching {
-                val account = google.signIn(this@MainActivity)
+                val device = TvGoogleSignIn(google)
+                val challenge = device.start()
+                signInChallenge = challenge
+                val account = device.finish(challenge)
                 val id = google.resolveProfile(account, profile)
                 GoogleAccount.save(applicationContext, id, account)
                 val synced = repository.useGoogleProfile(id, account.name, account.photoUrl)
@@ -115,12 +130,14 @@ class MainActivity : AppCompatActivity(), Updater.Listener {
                 android.widget.Toast.makeText(this@MainActivity, message, android.widget.Toast.LENGTH_SHORT).show()
                 onDone()
             }.onFailure {
-                if (it !is GetCredentialCancellationException) {
+                if (it !is CancellationException && it !is GetCredentialCancellationException) {
                     val reason = if (it is NoCredentialException) "Add a Google account in your TV settings and try again."
                         else it.message ?: it.javaClass.simpleName
                     android.widget.Toast.makeText(this@MainActivity, getString(R.string.google_failed, reason), android.widget.Toast.LENGTH_LONG).show()
                 }
             }
+            signInVisible = false
+            signInChallenge = null
         }
     }
 

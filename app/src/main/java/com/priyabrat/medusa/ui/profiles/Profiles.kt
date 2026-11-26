@@ -58,6 +58,7 @@ import com.priyabrat.medusa.ui.model.ProfilePageState
 import com.priyabrat.medusa.ui.model.ProfileTile
 import com.priyabrat.medusa.ui.model.ProfilesUiState
 import com.priyabrat.medusa.ui.model.Shelf
+import com.priyabrat.medusa.data.library.Profiles
 import com.priyabrat.medusa.ui.theme.Dimens
 import com.priyabrat.medusa.ui.theme.MedusaColors
 import com.priyabrat.medusa.ui.theme.MedusaType
@@ -115,8 +116,9 @@ private fun AvatarTile(name: String, avatar: Int, size: Dp, onClick: () -> Unit,
 
 /** "Who's watching?": every profile, plus Add profile. Picking one switches to it. */
 @Composable
-fun WhoIsWatchingScreen(state: ProfilesUiState, onPick: (String) -> Unit, onAdd: () -> Unit) {
+fun WhoIsWatchingScreen(state: ProfilesUiState, onPick: (String) -> Unit, onAdd: () -> Unit, onGuest: () -> Unit) {
     val first = remember { FocusRequester() }
+    val accounts = state.profiles.filterNot { it.id == Profiles.GUEST_ID }
     Column(
         Modifier.fillMaxSize().background(MedusaColors.Bg),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -124,10 +126,11 @@ fun WhoIsWatchingScreen(state: ProfilesUiState, onPick: (String) -> Unit, onAdd:
     ) {
         Text("Who’s watching?", style = MedusaType.PageTitle, modifier = Modifier.rise())
         Row(Modifier.padding(top = 36.dp).rise(), horizontalArrangement = Arrangement.spacedBy(28.dp)) {
-            state.profiles.forEachIndexed { i, p ->
+            accounts.forEachIndexed { i, p ->
                 AvatarTile(p.name, p.avatar, 96.dp, { onPick(p.id) }, if (i == 0) Modifier.focusRequester(first) else Modifier, photoUrl = p.photoUrl)
             }
-            if (state.profiles.size < 6) AvatarTile("", 0, 96.dp, onAdd, if (state.profiles.isEmpty()) Modifier.focusRequester(first) else Modifier, label = "Add Google account", add = true)
+            if (accounts.size < 6) AvatarTile("", 0, 96.dp, onAdd, if (accounts.isEmpty()) Modifier.focusRequester(first) else Modifier, label = "Add account", add = true)
+            AvatarTile("Guest", 0, 96.dp, onGuest, label = "Continue as guest")
         }
     }
     LaunchedEffect(state.profiles.size) { runCatching { first.requestFocus() } }
@@ -165,8 +168,9 @@ fun ProfileScreen(state: ProfilePageState, actions: ProfileActions, header: @Com
                     Row(Modifier.padding(top = Dimens.Gap8), horizontalArrangement = Arrangement.spacedBy(Dimens.Gap8)) {
                         if (!state.active) Pill("Switch to ${state.name}", { actions.onSwitch(state.id) }, Modifier.focusRequester(firstButton), style = PillStyle.Primary)
                         Pill("All profiles", actions.onAllProfiles, if (state.active) Modifier.focusRequester(firstButton) else Modifier)
-                        actions.onGoogle?.let { google -> if (state.google == null) Pill("Sign in with Google", { google(state.id) }) }
-                        if (state.google != null) Pill("Sign out of Google", { actions.onGoogleSignOut(state.id) })
+                        actions.onGoogle?.let { google -> if (state.google == null && state.id != Profiles.GUEST_ID) Pill("Sign in", { google(state.id) }) }
+                        if (state.google != null) Pill("Sign out", { actions.onGoogleSignOut(state.id) })
+                        if (state.id == Profiles.GUEST_ID) Pill("Leave guest", { actions.onGoogleSignOut(state.id) })
                     }
                 }
             }

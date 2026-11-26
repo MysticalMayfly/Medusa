@@ -30,4 +30,18 @@ class ProfileSelectionTest {
         val result = Profiles(listOf(a), "a").refreshVisible(listOf(a.copy(name = "Cloud"), b), emptySet(), emptySet())
         assertEquals(listOf(a.copy(name = "Cloud")), result)
     }
+
+    @Test fun guestIsIsolatedAndCanBeSelectedAgainWithoutDuplicates() {
+        val selected = Profiles(listOf(a), "a").withGuest()
+        assertEquals(Profiles.GUEST_ID, selected.active)
+        assertEquals(2, selected.withGuest().list.size)
+        assertEquals(listOf(a.id, Profiles.GUEST_ID), selected.list.map { it.id })
+    }
+
+    @Test fun retiredProfileRemovalLeavesOtherAccountsUntouched() {
+        val retired = Profile("p01f2b6c399", "Preetam", 0)
+        val cleaned = Profiles(listOf(retired, a), retired.id).withoutRetiredProfile()
+        assertEquals(listOf(a), cleaned.list)
+        assertEquals(a.id, cleaned.active)
+    }
 }

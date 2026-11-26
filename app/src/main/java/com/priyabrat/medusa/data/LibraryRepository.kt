@@ -86,6 +86,7 @@ class LibraryRepository(private val store: LibraryStore) : MedusaRepository {
     private val profilesFlow = MutableStateFlow(Profiles.DEFAULT)
     private val profilesReady = MutableStateFlow(false)
     private val profileMutex = Mutex()
+    private val outboxLock = Any()
 
     /** Titles with your TV changes applied; rebuilt whenever the library or a change moves. */
     private val snap: Flow<Snap> = combine(library, changes, profilesFlow) { lib, ch, ps -> Snap(lib, ch, ps.current.id == "p1") }
@@ -96,7 +97,13 @@ class LibraryRepository(private val store: LibraryStore) : MedusaRepository {
 
     init {
         io.launch {
-            val p = store.loadProfiles()
+            val existing = store.loadProfiles()
+            val p = existing.withoutRetiredProfile()
+            if (p != existing) {
+                store.saveProfiles(p)
+                store.deleteChanges("p01f2b6c399")
+                synchronized(outboxLock) { store.saveOutbox(store.loadOutbox().filterNot { it.profile == "p01f2b6c399" }) }
+            }
             profilesFlow.value = p
             changes.value = store.loadChanges(p.current.id)
             profilesReady.value = true
@@ -835,10 +842,9 @@ class LibraryRepository(private val store: LibraryStore) : MedusaRepository {
 
     // ================================================================ profile sync (data/library/ProfileSync.kt)
 
-    private val outboxLock = Any()
-
     /** Records one change for the central database: stamped locally, queued, and sent when the TV is online. */
     private fun record(profile: String, kind: String, titleId: Int?, value: JSONObject) {
+        if (profile == Profiles.GUEST_ID) return
         val e = ProfileEvent(profile, kind, titleId, value, ProfileEvent.now())
         if (titleId != null && profile == profilesFlow.value.current.id) changes.update { it.copy(stamps = it.stamps + (titleId to e.createdAt)) }
         io.launch {
@@ -874,7 +880,7 @@ class LibraryRepository(private val store: LibraryStore) : MedusaRepository {
         val active = if (list.any { it.id == ps.active }) ps.active else list.first().id
         // Save what is on screen before merging into the files.
         store.saveChanges(ps.current.id, changes.value)
-        for (p in list) store.saveChanges(p.id, ProfileSync.merge(store.loadChanges(p.id), server.rows[p.id] ?: emptyList()))
+        for (p in list) if (p.id != Profiles.GUEST_ID) store.saveChanges(p.id, ProfileSync.merge(store.loadChanges(p.id), server.rows[p.id] ?: emptyList()))
         val next = Profiles(list, active)
         store.saveProfiles(next)
         if (active != ps.current.id) { synchronized(rounds) { rounds.clear() }; keep.clear() }
@@ -889,6 +895,19 @@ class LibraryRepository(private val store: LibraryStore) : MedusaRepository {
     /** Set by MainActivity: whether a profile has a Google session. */
     var googleSignedIn: (String) -> Boolean = { false }
     private val googleSessionRevision = MutableStateFlow(0)
+
+    suspend fun useGuestProfile() = kotlinx.coroutines.withContext(Dispatchers.IO) {
+        profileMutex.withLock {
+            val ps = profilesFlow.value
+            if (ps.list.isNotEmpty()) store.saveChanges(ps.current.id, changes.value)
+            val next = ps.withGuest()
+            store.saveProfiles(next)
+            synchronized(rounds) { rounds.clear() }
+            keep.clear()
+            changes.value = store.loadChanges(Profiles.GUEST_ID)
+            profilesFlow.value = next
+        }
+    }
 
     /** Add or restore an account locally without changing or deleting another profile's history. */
     suspend fun useGoogleProfile(id: String, name: String, photoUrl: String?) = kotlinx.coroutines.withContext(Dispatchers.IO) {

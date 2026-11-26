@@ -4,7 +4,7 @@
     <selectionStates>
       <SelectionState runConfigName="app">
         <option name="selectionMode" value="DROPDOWN" />
-        <DropdownSelection timestamp="2026-11-20T12:13:54.818686Z">
+        <DropdownSelection timestamp="2026-11-21T19:38:23.908324Z">
           <Target type="DEFAULT_BOOT">
             <handle>
               <DeviceId pluginId="LocalEmulator" identifier="path=/Users/mysticalmirage/.android/avd/Television_1080p.avd" />
