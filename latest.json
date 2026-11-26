@@ -1,7 +1,7 @@
 {
-  "versionCode": 17,
+  "versionCode": 18,
   "versionName": "1.3",
-  "apkUrl": "https://raw.githubusercontent.com/MysticalMayfly/medusa/updates/medusa-1.3-b17.apk",
-  "sha256": "34286df2324b0bf883db6fff88aebaaf296b2fd4ed465bd0b8054fde26319b62",
-  "notes": "Loading messages fade out and in as one continuous sequence, preventing the previous line from flashing back between messages."
+  "apkUrl": "https://raw.githubusercontent.com/MysticalMayfly/medusa/updates/medusa-1.3-b18.apk",
+  "sha256": "4619f957b0828b7a744bfc6e77f2fff6a789bbd10c46d0ed693829c944aa710b",
+  "notes": "Add profiles with Google sign-in and sign out from a profile on this TV. Existing linked profile history is retained."
 }
