@@ -1,7 +1,7 @@
 {
-  "versionCode": 18,
+  "versionCode": 19,
   "versionName": "1.3",
-  "apkUrl": "https://raw.githubusercontent.com/MysticalMayfly/medusa/updates/medusa-1.3-b18.apk",
-  "sha256": "4619f957b0828b7a744bfc6e77f2fff6a789bbd10c46d0ed693829c944aa710b",
-  "notes": "Add profiles with Google sign-in and sign out from a profile on this TV. Existing linked profile history is retained."
+  "apkUrl": "https://raw.githubusercontent.com/MysticalMayfly/medusa/updates/medusa-1.3-b19.apk",
+  "sha256": "04004b4b5fd601cc27aebcd55bf358b2ff2223c3d1cb00b9d00c747c72f96429",
+  "notes": "New loading screen lines: \"Waking the serpents\" first, then 52 new curse and horror lines in random order."
 }
