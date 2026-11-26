@@ -128,18 +128,15 @@ fun BootScreen(showApp: () -> Unit, onDone: () -> Unit) {
         listOf(context.getString(R.string.boot_first_line)) + rest
     }
     var lineIndex by remember { mutableIntStateOf(0) }
-    var lineSwapAt by remember { mutableIntStateOf(-10_000) }
-    var lineEnteredAt by remember { mutableIntStateOf(-10_000) }
+    val lineAlpha = remember { Animatable(1f) }
     LaunchedEffect(Unit) {
         // Let the initial line finish its entrance before its first full reading interval.
         delay(2_600L)
         while (isActive && lineIndex < lines.lastIndex) {
-            delay(Boot.LINE_MS.toLong() - Boot.SWAP_MS)
-            lineSwapAt = clock.value.toInt()
-            delay(Boot.SWAP_MS.toLong())
+            delay(Boot.LINE_MS.toLong())
+            lineAlpha.animateTo(0f, tween(Boot.SWAP_MS, easing = LinearEasing))
             lineIndex += 1
-            lineEnteredAt = clock.value.toInt()
-            lineSwapAt = -10_000
+            lineAlpha.animateTo(1f, tween(Boot.SWAP_MS, easing = LinearEasing))
         }
     }
 
@@ -182,7 +179,7 @@ fun BootScreen(showApp: () -> Unit, onDone: () -> Unit) {
             Portrait(t, out, Modifier.size(artW, artH))
             Wordmark(t)
             RunLine(t)
-            Note(lines[lineIndex], t, { lineSwapAt }, { lineEnteredAt })
+            Note(lines[lineIndex], t, { lineAlpha.value })
         }
     }
 }
@@ -319,18 +316,14 @@ private fun RunLine(t: () -> Float) {
 }
 
 @Composable
-private fun Note(line: String, t: () -> Float, swapAt: () -> Int, enteredAt: () -> Int) {
+private fun Note(line: String, t: () -> Float, lineAlpha: () -> Float) {
     Text(
         text = line.uppercase(),
         style = TextStyle(fontFamily = Geist, fontSize = 11.sp, letterSpacing = 0.14.em, color = Boot.note, textAlign = TextAlign.Center),
         modifier = Modifier.graphicsLayer {
-            // fades in at 2 s; each change fades out and drops 4 px, then the new line appears
+            // Keep the old line invisible until its replacement is ready to fade in.
             val enter = seg(t(), 2000, 600)
-            val since = t() - swapAt()
-            val swap = if (since in 0f..260f) since / 260f else 0f
-            val newLine = ((t() - enteredAt()) / Boot.SWAP_MS).coerceIn(0f, 1f)
-            alpha = enter * (1f - swap) * newLine
-            translationY = 4.dp.toPx() * (swap + 1f - newLine)
+            alpha = enter * lineAlpha()
         },
     )
 }

@@ -8,6 +8,7 @@ If that build is then not published, remove its row.
 
 | Build | Version | Date | APK | Changes |
 |---|---|---|---|---|
+| b17 | 1.3 | 2026-11-27 | `medusa-1.3-b17.apk` | Loading messages fade out and in as one continuous sequence, preventing the previous line from flashing back between messages. |
 | b16 | 1.3 | 2026-11-27 | `medusa-1.3-b16.apk` | Quit starts a fresh session when Medusa is reopened. Carousel trailer fades no longer restart on playback updates, allowing the volume to reach its intended level. Loading text stays visible longer and fades between lines. |
 | b15 | 1.3 | 2026-11-27 | `medusa-1.3-b15.apk` | Tabs open without the deliberate focus delay and their focus indicators stay inside the navigation bar. Settings has a Quit Medusa button. Carousel trailers become less obscured after a few seconds, with controls and description returning on input. |
 | b14 | 1.3 | 2026-11-27 | `medusa-1.3-b14.apk` | Carousel: Down from the top menu lands on the main button; the arrows no longer catch focus and sit inside the safe margin; quick paging counts every press and keeps focus; the whole carousel stays on screen; pictures load ahead; the backdrop and poster fade out once the trailer plays; the trailer fills the width; "Tonight's pick" only on the first slide, genres only. Also: search keeps every letter, Back on Home goes to the top and asks before leaving (Medusa stays in memory), the intro and Who's watching show once per start, Where to watch opens the service's app, and the bottom of Home is reachable. |
