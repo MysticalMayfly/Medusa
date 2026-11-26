@@ -32,7 +32,7 @@ import com.priyabrat.medusa.ui.theme.Shapes
  * The button's wiring to the Updater stays in MainActivity (docs/RULES.md rule 11).
  */
 @Composable
-fun SettingsScreen(state: SettingsUiState, onUpdateButton: () -> Unit, onImportButton: () -> Unit, header: @Composable () -> Unit, buttonFocus: FocusRequester) {
+fun SettingsScreen(state: SettingsUiState, onUpdateButton: () -> Unit, onImportButton: () -> Unit, onQuit: () -> Unit, header: @Composable () -> Unit, buttonFocus: FocusRequester) {
     Column(Modifier.fillMaxSize()) {
         header()
         Column(
@@ -91,6 +91,7 @@ fun SettingsScreen(state: SettingsUiState, onUpdateButton: () -> Unit, onImportB
                     )
                 }
             }
+            Pill(stringResource(R.string.quit_app), onClick = onQuit, height = 32.dp, textStyle = MedusaType.ControlStrong)
         }
     }
 }

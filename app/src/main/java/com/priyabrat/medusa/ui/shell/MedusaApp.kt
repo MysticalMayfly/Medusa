@@ -125,7 +125,7 @@ fun MedusaApp(
         is Screen.Universe -> Tab.Universes
         else -> null
     }
-    val header: @Composable () -> Unit = {
+    val headerContent = androidx.compose.runtime.rememberUpdatedState<@Composable () -> Unit>({
         AppHeader(
             current = currentTab,
             onTab = { go(Screen.Top(it)) },
@@ -137,7 +137,9 @@ fun MedusaApp(
             down = heroEntry.takeIf { screen is Screen.Top && screen.tab != Tab.More && screen.tab != Tab.Universes },
             onProfile = { profiles.current?.let { go(Screen.Profile(it.id)) } },
         )
-    }
+    })
+    // Keep the same focus nodes as the header moves between screen layouts.
+    val header = remember { androidx.compose.runtime.movableContentOf { headerContent.value() } }
 
     // Actions are built once (remember), not on every recomposition of the shell. A new object each
     // time made Compose rebuild the whole open screen whenever the shell changed, e.g. when the
@@ -222,7 +224,7 @@ fun MedusaApp(
                     // and writing the older query back into the field threw away every letter after the first.
                     SearchScreen(state.copy(query = query), onQuery = { query = it }, onOpen = open, header = header, fieldFocus = searchField)
                 }
-                Screen.Settings -> SettingsScreen(settings, onUpdateButton, onImportButton, header, settingsButton)
+                Screen.Settings -> SettingsScreen(settings, onUpdateButton, onImportButton, { activity?.finishAndRemoveTask() }, header, settingsButton)
                 Screen.Profiles -> WhoIsWatchingScreen(
                     profiles,
                     onPick = { repo.switchProfile(it); go(Screen.Top(Tab.Home)) },

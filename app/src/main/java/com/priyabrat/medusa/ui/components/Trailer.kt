@@ -48,6 +48,7 @@ object TrailerTiming {
     const val START_AT_MS = 900L        // a trailer pick starts its hidden player this long after it appears
     const val SIGN_S = 4.1f             // seconds of real playback before it is shown (measure again on the TV)
     const val FADE_MS = 1200            // picture and sound fade together
+    const val QUIET_AFTER_MS = 3000L    // then the hero text and fade step back so the video shows
     const val END_LEAD_S = 6f           // start fading this many seconds before the end
     const val AFTER_TRAILER_MS = 3000L  // then the next pick, this much later
     const val NO_START_MS = 10_000L     // no playback by then: show the still instead

@@ -56,6 +56,7 @@ import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.type
@@ -139,6 +140,17 @@ fun HeroCarousel(
         if (trailerShown) 0f else 1f, tween(TrailerTiming.FADE_MS), label = "heroStill",
     )
     val trailerId = pick.trailerId?.takeIf { trailer != TRAILER_FAILED }
+    // A few seconds into a trailer the description fades and the left fade lightens, so most of the video shows.
+    // Any button press brings the full look back for a few seconds.
+    var nudge by remember { mutableStateOf(0) }
+    var quiet by remember(i) { mutableStateOf(false) }
+    LaunchedEffect(trailerShown, nudge) {
+        quiet = false
+        if (trailerShown) { delay(TrailerTiming.QUIET_AFTER_MS); quiet = true }
+    }
+    val quietness by androidx.compose.animation.core.animateFloatAsState(
+        if (quiet && trailerShown) 1f else 0f, tween(TrailerTiming.FADE_MS), label = "heroQuiet",
+    )
     LaunchedEffect(i, focusInside, chooserOpen, picks.size, trailer, trailerId, paused) {
         if (picks.size <= 1 || focusInside || chooserOpen || paused) return@LaunchedEffect
         when {
@@ -168,6 +180,7 @@ fun HeroCarousel(
                 focusInside = it.hasFocus
             }
             .bringIntoViewRequester(bringHero)
+            .onPreviewKeyEvent { if (it.type == KeyEventType.KeyDown) nudge++; false }
 
             // Away: once the page scrolls down to the rows, the trailer pauses (the Mac waited until 45 % was out of
             // view; the TV pauses sooner, because a playing video behind scrolling rows made every frame slow on it).
@@ -204,7 +217,8 @@ fun HeroCarousel(
         }
         // The fades over backdrop and trailer, painted once into their own cached layer: one copy per frame instead of
         // two full-width gradient fills (the TV's GPU is the bottleneck when scrolling).
-        Box(Modifier.fillMaxSize().graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }) {
+        // Full look (still picture): solid to 82 % to 20 % black. Quiet look (trailer playing): 50 % black, clear by the middle.
+        Box(Modifier.fillMaxSize().graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen; alpha = 1f - quietness }) {
             // .tn-art::after: fade to the page colour on the left and at the bottom
             Box(
                 Modifier.fillMaxSize().background(
@@ -217,6 +231,16 @@ fun HeroCarousel(
                 ),
             )
             Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0.55f to Color.Transparent, 1f to MedusaColors.Bg)))
+        }
+        if (quietness > 0f) {
+            Box(Modifier.fillMaxSize().graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen; alpha = quietness }) {
+                Box(
+                    Modifier.fillMaxSize().background(
+                        Brush.horizontalGradient(0f to MedusaColors.Bg.copy(alpha = 0.5f), 0.5f to Color.Transparent),
+                    ),
+                )
+                Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0.7f to Color.Transparent, 1f to MedusaColors.Bg)))
+            }
         }
 
         Row(
@@ -242,7 +266,10 @@ fun HeroCarousel(
                             Text("${pick.year}  ·  ${pick.runtime}", style = MedusaType.MonoStrong)
                             pick.ratings.forEach { RatingBadge(it) }
                         }
-                        Text(pick.overview, style = MedusaType.Body, maxLines = 3, overflow = TextOverflow.Ellipsis)
+                        Text(
+                            pick.overview, style = MedusaType.Body, maxLines = 3, overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.graphicsLayer { alpha = 1f - quietness },
+                        )
                     }
                 }
                     Row(

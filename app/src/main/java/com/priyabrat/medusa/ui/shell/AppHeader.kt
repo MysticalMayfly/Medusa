@@ -158,7 +158,6 @@ fun AppHeader(
         IconCircle(MedusaIcons.Gear, onSettings, Modifier.focusRequester(focus.settings), dot = updateWaiting)
     }
 }
-
 @Composable
 private fun NavItem(
     label: String,
@@ -171,19 +170,17 @@ private fun NavItem(
     val f = rememberFocusable()
     val focused = f.focused.value
     // Moving along the tabs with left and right opens each one, like a TV launcher: no OK press needed.
-    // A short pause first, so sliding past a few tabs doesn't build every page on the way.
     val latestClick = androidx.compose.runtime.rememberUpdatedState(onClick)
     androidx.compose.runtime.LaunchedEffect(focused, selected) {
         if (focused && !selected && armed?.value != false) {
-            kotlinx.coroutines.delay(TAB_FOCUS_DELAY_MS)
             latestClick.value()
         }
     }
     // Read only while drawing, so the tab's colour change redraws it without rebuilding the header.
     val bg = animateColorAsState(
         when {
-            selected -> MedusaColors.Fg
-            focused -> MedusaColors.Raised
+            focused -> MedusaColors.Fg
+            selected -> MedusaColors.Raised
             else -> Color.Transparent
         },
         tween(Motion.ColorMs), label = "navBg",
@@ -192,10 +189,12 @@ private fun NavItem(
         Modifier
             .focusRequester(requester)
             .then(if (down != null) Modifier.focusProperties { this.down = down } else Modifier)
-            .focusRing(focused, offset = 2.dp)
+            // Keep the focus indicator inside the clipped navigation bar; an outside ring is cut off
+            // and overlaps its neighbours. A focused tab is filled, while the active tab has a border.
             .height(Dimens.NavItemH)
             .clip(Shapes.Pill)
             .drawBehind { drawRect(bg.value) }
+            .border(1.dp, if (selected && !focused) MedusaColors.Fg else Color.Transparent, Shapes.Pill)
             .tvClick(f, onClick = onClick)
             .padding(horizontal = 11.dp),
         contentAlignment = Alignment.Center,
@@ -204,12 +203,10 @@ private fun NavItem(
             label,
             style = MedusaType.Nav,
             color = when {
-                selected -> MedusaColors.Inv
-                focused -> MedusaColors.Fg
+                focused -> MedusaColors.Inv
+                selected -> MedusaColors.Fg
                 else -> MedusaColors.Muted
             },
         )
     }
 }
-
-private const val TAB_FOCUS_DELAY_MS = 350L
