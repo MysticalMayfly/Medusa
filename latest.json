@@ -1,7 +1,7 @@
 {
-  "versionCode": 19,
+  "versionCode": 20,
   "versionName": "1.3",
-  "apkUrl": "https://raw.githubusercontent.com/MysticalMayfly/medusa/updates/medusa-1.3-b19.apk",
-  "sha256": "04004b4b5fd601cc27aebcd55bf358b2ff2223c3d1cb00b9d00c747c72f96429",
-  "notes": "New loading screen lines: \"Waking the serpents\" first, then 52 new curse and horror lines in random order."
+  "apkUrl": "https://raw.githubusercontent.com/MysticalMayfly/medusa/updates/medusa-1.3-b20.apk",
+  "sha256": "369b95c1d4fe5e9497c35b08863a2789f2d701fe7bc91b8e38ad2ad98dfd6600",
+  "notes": "Add account uses phone sign-in with a QR code. Continue as guest keeps viewing on this TV. Profile labels are simplified and the retired Preetam profile is removed."
 }
