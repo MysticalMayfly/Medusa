@@ -40,6 +40,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import coil3.request.transformations
 import androidx.tv.material3.Text
 import com.priyabrat.medusa.ui.model.ContinueItem
 import com.priyabrat.medusa.ui.model.Shelf
@@ -55,18 +56,34 @@ import com.priyabrat.medusa.ui.theme.Shapes
  * Stage 2 replaces this with the real poster or backdrop image.
  */
 @Composable
-fun ArtPlaceholder(label: String?, modifier: Modifier = Modifier, tint: Color = MedusaColors.Raised, shape: Shape = RectangleShape, url: String? = null) {
+fun ArtPlaceholder(
+    label: String?,
+    modifier: Modifier = Modifier,
+    tint: Color = MedusaColors.Raised,
+    shape: Shape = RectangleShape,
+    url: String? = null,
+    corner: Dp = 0.dp,
+) {
     Box(
         modifier.background(Brush.linearGradient(listOf(tint, MedusaColors.Surface)), shape),
         contentAlignment = Alignment.Center,
     ) {
         if (url != null) {
             // The real poster or backdrop from TMDB's image server, over the placeholder while it loads.
+            // Speed: rounded corners are cut into the decoded picture once ([corner]), not clipped on every frame.
+            // A clipping layer per poster made each scroll frame on the TV's GPU slow (50+ layers on a wall).
+            val context = androidx.compose.ui.platform.LocalContext.current
+            val px = with(androidx.compose.ui.platform.LocalDensity.current) { corner.toPx() }
+            val request = androidx.compose.runtime.remember(url, px) {
+                coil3.request.ImageRequest.Builder(context).data(url).apply {
+                    if (px > 0f) transformations(coil3.transform.RoundedCornersTransformation(px))
+                }.build()
+            }
             coil3.compose.AsyncImage(
-                model = url,
+                model = request,
                 contentDescription = null,
                 contentScale = androidx.compose.ui.layout.ContentScale.Crop,
-                modifier = Modifier.fillMaxSize().then(if (shape == RectangleShape) Modifier else Modifier.graphicsLayer { this.shape = shape; clip = true }),
+                modifier = Modifier.fillMaxSize(),
             )
         } else if (label != null) {
             Text(
@@ -119,6 +136,7 @@ fun PosterCard(card: TitleCard, onOpen: (String) -> Unit, modifier: Modifier = M
             ArtPlaceholder(
                 card.title,
                 url = card.posterUrl,
+                corner = 8.dp,
                 modifier = Modifier
                     .fillMaxSize()
                     .then(
@@ -240,6 +258,7 @@ fun ContinueCard(item: ContinueItem, onOpen: (String) -> Unit, onTick: (String) 
             ArtPlaceholder(
                 item.title,
                 url = item.backdropUrl,
+                corner = 9.dp,
                 modifier = Modifier
                     .fillMaxWidth()
                     .aspectRatio(16f / 9f)

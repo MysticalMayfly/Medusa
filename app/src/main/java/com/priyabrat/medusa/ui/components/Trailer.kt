@@ -20,6 +20,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.viewinterop.AndroidView
@@ -78,6 +79,11 @@ fun TrailerLayer(videoId: String, paused: Boolean, dipped: Boolean, onEnded: () 
     val view = remember {
         YouTubePlayerView(context).apply {
             enableAutomaticInitialization = false
+            // The player is a picture behind the pick, never a control: its WebView must not take the remote's focus
+            // (it did, and the D-pad then went nowhere after switching tabs).
+            isFocusable = false
+            isFocusableInTouchMode = false
+            descendantFocusability = ViewGroup.FOCUS_BLOCK_DESCENDANTS
             layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
             val options = IFramePlayerOptions.Builder(context)
                 .controls(0).rel(0).ivLoadPolicy(3).ccLoadPolicy(0).fullscreen(0).autoplay(0).mute(1)
@@ -149,12 +155,24 @@ fun TrailerLayer(videoId: String, paused: Boolean, dipped: Boolean, onEnded: () 
     BoxWithConstraints(modifier.fillMaxSize().clipToBounds()) {
         val w = maxOf(maxWidth, maxHeight * (16f / 9f))
         val h = w * (9f / 16f)
+        // Speed: the player is laid out at half size and scaled up. YouTube picks the stream by player size, so the
+        // TV decodes a lighter video and the WebView composites a quarter of the pixels; behind the fades the
+        // difference is hard to see. (At full size, playback alone kept the TV under 30 frames a second.)
         AndroidView(
             factory = { view },
-            modifier = Modifier.requiredSize(w, h).graphicsLayer { this.alpha = alpha.value },
+            modifier = Modifier
+                .requiredSize(w * VIDEO_SCALE, h * VIDEO_SCALE)
+                .focusProperties { canFocus = false }
+                .graphicsLayer {
+                    this.alpha = alpha.value
+                    scaleX = 1f / VIDEO_SCALE
+                    scaleY = 1f / VIDEO_SCALE
+                },
         )
     }
 }
+
+private const val VIDEO_SCALE = 0.5f
 
 private suspend fun fadeVolume(p: YouTubePlayer, from: Int, to: Int) {
     val steps = (TrailerTiming.FADE_MS / 100).coerceAtLeast(1)

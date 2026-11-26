@@ -143,6 +143,15 @@ fun AppHeader(
 private fun NavItem(label: String, selected: Boolean, onClick: () -> Unit, requester: FocusRequester) {
     val f = rememberFocusable()
     val focused = f.focused.value
+    // Moving along the tabs with left and right opens each one, like a TV launcher: no OK press needed.
+    // A short pause first, so sliding past a few tabs doesn't build every page on the way.
+    val latestClick = androidx.compose.runtime.rememberUpdatedState(onClick)
+    androidx.compose.runtime.LaunchedEffect(focused, selected) {
+        if (focused && !selected) {
+            kotlinx.coroutines.delay(TAB_FOCUS_DELAY_MS)
+            latestClick.value()
+        }
+    }
     // Read only while drawing, so the tab's colour change redraws it without rebuilding the header.
     val bg = animateColorAsState(
         when {
@@ -174,3 +183,5 @@ private fun NavItem(label: String, selected: Boolean, onClick: () -> Unit, reque
         )
     }
 }
+
+private const val TAB_FOCUS_DELAY_MS = 220L

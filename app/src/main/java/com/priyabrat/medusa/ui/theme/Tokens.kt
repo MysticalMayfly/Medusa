@@ -15,7 +15,7 @@ import androidx.compose.ui.unit.dp
 
 /** Colours: the Mac app's dark tokens (app.css :root[data-theme="dark"]). */
 object MedusaColors {
-    val Bg = Color(0xFF07070B)
+    val Bg = Color(0xFF000000)            // true black: the mini LED panel switches those zones off (Mac: #07070B)
     val Surface = Color(0xFF0E0E14)
     val Card = Color(0xFF101017)
     val Raised = Color(0xFF15151E)

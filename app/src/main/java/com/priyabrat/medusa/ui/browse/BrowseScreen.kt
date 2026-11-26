@@ -32,6 +32,7 @@ import com.priyabrat.medusa.ui.components.PillStyle
 import com.priyabrat.medusa.ui.components.PosterCard
 import com.priyabrat.medusa.ui.components.SelectPill
 import com.priyabrat.medusa.ui.components.rise
+import com.priyabrat.medusa.ui.model.BrowseKind
 import com.priyabrat.medusa.ui.model.BrowseUiState
 import com.priyabrat.medusa.ui.model.FilterOption
 import com.priyabrat.medusa.ui.model.TitleCard
@@ -58,13 +59,14 @@ class BrowseActions(
 fun BrowseScreen(state: BrowseUiState, actions: BrowseActions, header: @Composable () -> Unit) {
     PageGrid {
         fullWidth("top") {
-            if (state.pick != null) {
-                Box {
-                    HeroCarousel(listOf(state.pick), actions.hero, height = Dimens.PageHeroHeight)
-                    header()
-                }
-            } else {
-                Column { header(); Spacer(Modifier.height(Dimens.Gap22)) }
+            val picks = state.picks.ifEmpty { listOfNotNull(state.pick) }
+            // The header stays in the same place in the tree whether or not the carousel has picks yet: the picks
+            // arrive a moment after the page opens, and rebuilding the header then threw the remote's focus away.
+            // More has no carousel (BrowseKind.More), so it keeps a short gap instead.
+            Box {
+                if (state.kind != BrowseKind.More) HeroCarousel(picks, actions.hero, height = Dimens.PageHeroHeight)
+                else Spacer(Modifier.height(Dimens.HeaderControl + Dimens.SafeTop + Dimens.Gap22))
+                header()
             }
         }
         fullWidth("title") { PageTitle(state.title, state.summary, Modifier.padding(horizontal = Dimens.SafeH).rise()) }

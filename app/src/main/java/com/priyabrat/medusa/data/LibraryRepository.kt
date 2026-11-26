@@ -493,10 +493,10 @@ class LibraryRepository(private val store: LibraryStore) : MedusaRepository {
         val sorts = listOf("default" to "By platform", "added" to "Recently added", "title" to "Title A–Z", "year" to "Newest first", "rating" to "Top rated")
         return BrowseUiState(
             kind = kind,
-            pick = when (kind) {
-                BrowseKind.Movies -> round("movie").firstOrNull()?.let { heroPick(it, "movie") }
-                BrowseKind.Shows -> round("show").firstOrNull()?.let { heroPick(it, "show") }
-                BrowseKind.More -> null
+            picks = when (kind) {
+                BrowseKind.Movies -> round("movie").map { heroPick(it, "movie") }
+                BrowseKind.Shows -> round("show").map { heroPick(it, "show") }
+                BrowseKind.More -> emptyList()
             },
             title = when (kind) { BrowseKind.Movies -> "Movies"; BrowseKind.Shows -> "TV shows"; BrowseKind.More -> "More" },
             summary = (if (more) "Not streaming, free, for rent or for sale in India right now · " else "") +
@@ -543,7 +543,7 @@ class LibraryRepository(private val store: LibraryStore) : MedusaRepository {
             years.map { FilterOption(it.year.toString(), it.year.toString(), selected = tab == it.year.toString()) } +
             FilterOption("all", "All horror", selected = tab == "all")
         return HorrorUiState(
-            pick = round("horror").firstOrNull()?.let { heroPick(it, "horror") },
+            picks = round("horror").map { heroPick(it, "horror") },
             tabs = tabs,
             shelves = if (tab == "browse") horrorRows() else emptyList(),
             wall = if (tab == "browse") null else horrorWall(tab, f),

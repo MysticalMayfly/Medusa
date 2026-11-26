@@ -122,6 +122,7 @@ enum class BrowseKind { Movies, Shows, More }
 data class BrowseUiState(
     val kind: BrowseKind,
     val pick: HeroPick? = null,
+    val picks: List<HeroPick> = emptyList(),  // the page's whole carousel round (pick is the first)
     val title: String = "",
     val summary: String = "",             // "130 of 986 watched"
     val platformTabs: List<FilterOption> = emptyList(),
@@ -145,6 +146,7 @@ data class HorrorWall(
 
 data class HorrorUiState(
     val pick: HeroPick? = null,
+    val picks: List<HeroPick> = emptyList(),
     val tabs: List<FilterOption> = emptyList(),    // Browse, 2026, 2025, 2024, All horror
     val shelves: List<Shelf> = emptyList(),        // shown on Browse
     val wall: HorrorWall? = null,                  // shown on a year or All horror

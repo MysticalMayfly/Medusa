@@ -30,6 +30,8 @@ object MedusaIcons {
     val Close = stroke("M18 6 6 18", "m6 6 12 12")
     val Eye = stroke("M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z", "M15 12a3 3 0 1 1-6 0a3 3 0 1 1 6 0")
     val Grid = stroke("M3 3h7v7H3z", "M14 3h7v7h-7z", "M14 14h7v7h-7z", "M3 14h7v7H3z")
+    val ChevronLeft = stroke("m15 18-6-6 6-6")
+    val ChevronRight = stroke("m9 18 6-6-6-6")
     val ArrowLeft = stroke("m12 19-7-7 7-7", "M19 12H5")
 
     private fun stroke(vararg paths: String): ImageVector = ImageVector.Builder(

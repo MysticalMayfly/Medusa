@@ -137,10 +137,11 @@ fun HeroCarousel(
             .fillMaxWidth()
             .height(height)
             .onFocusChanged { focusInside = it.hasFocus }
-            // Away (tonight.js): scrolled more than 45 % out of view pauses the trailer.
+            // Away: once the page scrolls down to the rows, the trailer pauses (the Mac waited until 45 % was out of
+            // view; the TV pauses sooner, because a playing video behind scrolling rows made every frame slow on it).
             .onGloballyPositioned { c ->
                 val shown = c.boundsInWindow().height
-                onScreen = c.size.height == 0 || shown >= c.size.height * 0.55f
+                onScreen = c.size.height == 0 || shown >= c.size.height * 0.9f
             },
     ) {
         // Speed: the backdrop and its two fades are painted once into one cached layer (Offscreen), so
@@ -155,17 +156,22 @@ fun HeroCarousel(
                     url = picks.getOrNull(n)?.backdropUrl,
                 )
             }
-            if (trailerId != null) {
-                key(pick.id) {
-                    TrailerLayer(
-                        videoId = trailerId,
-                        paused = paused,
-                        dipped = chooserOpen,
-                        onEnded = { trailer = TRAILER_ENDED },
-                        onFailed = { trailer = TRAILER_FAILED },
-                    )
-                }
+        }
+        // The trailer sits outside that cached layer: video frames must not repaint the backdrop under them.
+        if (trailerId != null) {
+            key(pick.id) {
+                TrailerLayer(
+                    videoId = trailerId,
+                    paused = paused,
+                    dipped = chooserOpen,
+                    onEnded = { trailer = TRAILER_ENDED },
+                    onFailed = { trailer = TRAILER_FAILED },
+                )
             }
+        }
+        // The fades over backdrop and trailer, painted once into their own cached layer: one copy per frame instead of
+        // two full-width gradient fills (the TV's GPU is the bottleneck when scrolling).
+        Box(Modifier.fillMaxSize().graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }) {
             // .tn-art::after: fade to the page colour on the left and at the bottom
             Box(
                 Modifier.fillMaxSize().background(
@@ -211,9 +217,7 @@ fun HeroCarousel(
                             },
                             modifier = Modifier
                                 .then(if (entry != null) Modifier.focusRequester(entry) else Modifier)
-                                .onKeyEvent { e ->
-                                    if (e.type == KeyEventType.KeyDown && e.key == Key.DirectionLeft && picks.size > 1) { step(-1); true } else false
-                                },
+
                         )
                         GlassRound(
                             if (pick.interested) MedusaIcons.HeartFilled else MedusaIcons.Heart,
@@ -226,9 +230,7 @@ fun HeroCarousel(
                             MedusaIcons.Check,
                             onClick = { actions.onSeen(pick.id, !pick.seen) },
                             on = pick.seen,
-                            modifier = Modifier.onKeyEvent { e ->
-                                if (e.type == KeyEventType.KeyDown && e.key == Key.DirectionRight && picks.size > 1) { step(1); true } else false
-                            },
+
                         )
                     }
                     if (picks.size > 1) {
@@ -254,11 +256,15 @@ fun HeroCarousel(
                             .rise()
                             .width(Dimens.HeroPosterW)
                             .aspectRatio(4f / 5f)
-                            .shadow(24.dp, RoundedCornerShape(11.dp))
                             .clip(RoundedCornerShape(11.dp)),
                     )
                 }
             }
+        }
+        // The Mac's ‹ › arrows (.tn-nav): previous and next pick, reached with left and right from the buttons.
+        if (picks.size > 1) {
+            IconCircle(MedusaIcons.ChevronLeft, { step(-1) }, Modifier.align(Alignment.CenterStart).padding(start = 8.dp), size = 32.dp)
+            IconCircle(MedusaIcons.ChevronRight, { step(1) }, Modifier.align(Alignment.CenterEnd).padding(end = 8.dp), size = 32.dp)
         }
     }
 

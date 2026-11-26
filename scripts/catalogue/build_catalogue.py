@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Medusa's upkeeper: keeps the master database on the Mac and pushes the maintained view to Supabase for the TV.
 
-The master database is ~/Desktop/Medusa Master/medusa-master.db: the single source of truth and the only copy that is
+The master database is ~/Desktop/Medusa/medusa-master.db: the single source of truth and the only copy that is
 ever updated. Supabase only receives what this script pushes; the TV only reads Supabase and keeps its own cache.
 
     python3 scripts/catalogue/build_catalogue.py seed      # once: titles from ~/Desktop/Films (medusa.fixed.csv,
@@ -13,8 +13,8 @@ ever updated. Supabase only receives what this script pushes; the TV only reads 
     python3 scripts/catalogue/build_catalogue.py upkeep    # fetch + build + publish + sync
 
 Master tables: sources (one row per title, the CSV row it came from: edit here), catalogue (built, what Supabase gets),
-services, platforms. TMDB token: ~/Desktop/Films/.tmdb_key. Cache: ~/Desktop/Medusa Master/tmdb_cache/.
-Supabase settings: ~/Desktop/Medusa Master/.supabase.env (never in this repo or the app).
+services, platforms. TMDB token: ~/Desktop/Films/.tmdb_key. Cache: ~/Desktop/Medusa/tmdb_cache/.
+Supabase settings: ~/Desktop/Medusa/.supabase.env (never in this repo or the app).
 Personal data (what you watched) stays in sources and is NOT published: the view is readable with the app's public key.
 Standard library only.
 """
@@ -33,7 +33,7 @@ from datetime import datetime, timezone
 FILMS_DIR = os.path.expanduser(os.environ.get('MEDUSA_FILMS_DIR', '~/Desktop/Films'))
 FILMS_CSV = os.path.join(FILMS_DIR, 'medusa.fixed.csv')
 SHOWS_CSV = os.path.join(FILMS_DIR, 'tv_shows.csv')
-MASTER_DIR = os.path.expanduser(os.environ.get('MEDUSA_MASTER_DIR', '~/Desktop/Medusa Master'))
+MASTER_DIR = os.path.expanduser(os.environ.get('MEDUSA_MASTER_DIR', '~/Desktop/Medusa'))
 MASTER = os.path.join(MASTER_DIR, 'medusa-master.db')
 CACHE = os.path.join(MASTER_DIR, 'tmdb_cache')
 SCHEMA = os.path.join(os.path.dirname(__file__), 'schema.sql')
@@ -372,7 +372,11 @@ def rest(method, path, body=None, prefer=None):
 
 def norm(ts):
     """Any ISO timestamp -> UTC 'YYYY-MM-DDTHH:MM:SS.ffffffZ', so timestamps compare as text."""
-    d = datetime.fromisoformat(ts.replace('Z', '+00:00'))
+    import re
+    ts = ts.replace('Z', '+00:00')
+    # Older Pythons only read 0, 3 or 6 fraction digits: pad or trim to 6.
+    ts = re.sub(r'\.(\d+)', lambda m: '.' + (m.group(1) + '000000')[:6], ts)
+    d = datetime.fromisoformat(ts)
     return d.astimezone(timezone.utc).strftime('%Y-%m-%dT%H:%M:%S.%fZ')
 
 
