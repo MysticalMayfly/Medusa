@@ -42,4 +42,12 @@
     <string name="not_wired_watch">Not wired yet: opening the app comes with the database</string>
     <string name="not_wired_trailer">Not wired yet: trailers come in a later step</string>
     <string name="not_wired_link">Not wired yet: links come with the database</string>
+    <string name="link_missing">No link for this one yet</string>
+    <string name="link_no_app">No app on this TV can open this link</string>
+    <string name="library">Catalogue</string>
+    <string name="btn_import">Refresh catalogue</string>
+    <string name="import_looking">Updating the catalogue…</string>
+    <string name="import_none">No catalogue yet. It downloads when the TV is online.</string>
+    <string name="import_done">%1$d titles · updated %2$s</string>
+    <string name="import_failed">Couldn’t update (%1$s). %2$s</string>
 </resources>

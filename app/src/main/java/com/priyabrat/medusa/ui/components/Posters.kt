@@ -55,12 +55,20 @@ import com.priyabrat.medusa.ui.theme.Shapes
  * Stage 2 replaces this with the real poster or backdrop image.
  */
 @Composable
-fun ArtPlaceholder(label: String?, modifier: Modifier = Modifier, tint: Color = MedusaColors.Raised, shape: Shape = RectangleShape) {
+fun ArtPlaceholder(label: String?, modifier: Modifier = Modifier, tint: Color = MedusaColors.Raised, shape: Shape = RectangleShape, url: String? = null) {
     Box(
         modifier.background(Brush.linearGradient(listOf(tint, MedusaColors.Surface)), shape),
         contentAlignment = Alignment.Center,
     ) {
-        if (label != null) {
+        if (url != null) {
+            // The real poster or backdrop from TMDB's image server, over the placeholder while it loads.
+            coil3.compose.AsyncImage(
+                model = url,
+                contentDescription = null,
+                contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                modifier = Modifier.fillMaxSize().then(if (shape == RectangleShape) Modifier else Modifier.graphicsLayer { this.shape = shape; clip = true }),
+            )
+        } else if (label != null) {
             Text(
                 label,
                 style = MedusaType.CardTitle,
@@ -110,7 +118,8 @@ fun PosterCard(card: TitleCard, onOpen: (String) -> Unit, modifier: Modifier = M
             // per poster), and the 40 % fade layer is only added to watched titles.
             ArtPlaceholder(
                 card.title,
-                Modifier
+                url = card.posterUrl,
+                modifier = Modifier
                     .fillMaxSize()
                     .then(
                         if (card.watched) {
@@ -230,7 +239,8 @@ fun ContinueCard(item: ContinueItem, onOpen: (String) -> Unit, onTick: (String) 
         Column(Modifier.tvClick(f) { onOpen(item.id) }) {
             ArtPlaceholder(
                 item.title,
-                Modifier
+                url = item.backdropUrl,
+                modifier = Modifier
                     .fillMaxWidth()
                     .aspectRatio(16f / 9f)
                     .graphicsLayer { translationY = -2 * density * lift }

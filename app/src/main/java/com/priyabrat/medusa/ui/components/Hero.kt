@@ -38,6 +38,8 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.CompositingStrategy
@@ -96,7 +98,7 @@ fun HeroCarousel(
         Spacer(modifier.height(height))
         return
     }
-    val toast = LocalToast.current
+    val openLink = rememberOpenLink()
     var index by remember(picks.size) { mutableIntStateOf(0) }
     var focusInside by remember { mutableStateOf(false) }
     var chooserOpen by remember { mutableStateOf(false) }
@@ -104,10 +106,18 @@ fun HeroCarousel(
     val pick = picks[i]
     fun step(by: Int) { index = (i + by + picks.size) % picks.size }
 
-    LaunchedEffect(i, focusInside, chooserOpen, picks.size) {
-        if (picks.size > 1 && !focusInside && !chooserOpen) {
-            delay(Motion.HeroStillMs.toLong())
-            step(1)
+    // The playlist (tonight.js): a pick without a trailer stays 8 s; one with a trailer plays it, fades out before
+    // the end, and the next pick comes AFTER_TRAILER later. A trailer that never starts falls back to the still.
+    val covered = LocalTrailersPaused.current
+    var onScreen by remember { mutableStateOf(true) }
+    val paused = covered || !onScreen
+    var trailer by remember(i) { mutableIntStateOf(TRAILER_PLAYING) }
+    val trailerId = pick.trailerId?.takeIf { trailer != TRAILER_FAILED }
+    LaunchedEffect(i, focusInside, chooserOpen, picks.size, trailer, trailerId, paused) {
+        if (picks.size <= 1 || focusInside || chooserOpen || paused) return@LaunchedEffect
+        when {
+            trailerId == null -> { delay(Motion.HeroStillMs.toLong()); step(1) }
+            trailer == TRAILER_ENDED -> { delay(TrailerTiming.AFTER_TRAILER_MS); step(1) }
         }
     }
 
@@ -122,7 +132,17 @@ fun HeroCarousel(
         remember { mutableFloatStateOf(1f) }
     }
 
-    Box(modifier.fillMaxWidth().height(height).onFocusChanged { focusInside = it.hasFocus }) {
+    Box(
+        modifier
+            .fillMaxWidth()
+            .height(height)
+            .onFocusChanged { focusInside = it.hasFocus }
+            // Away (tonight.js): scrolled more than 45 % out of view pauses the trailer.
+            .onGloballyPositioned { c ->
+                val shown = c.boundsInWindow().height
+                onScreen = c.size.height == 0 || shown >= c.size.height * 0.55f
+            },
+    ) {
         // Speed: the backdrop and its two fades are painted once into one cached layer (Offscreen), so
         // while the page scrolls the TV's GPU copies one picture instead of filling the whole area
         // three times every frame. The layer is repainted only while the art changes (crossfade, zoom).
@@ -132,7 +152,19 @@ fun HeroCarousel(
                     null,
                     Modifier.fillMaxSize().graphicsLayer { scaleX = scale.value; scaleY = scale.value },
                     tint = heroTints[n % heroTints.size],
+                    url = picks.getOrNull(n)?.backdropUrl,
                 )
+            }
+            if (trailerId != null) {
+                key(pick.id) {
+                    TrailerLayer(
+                        videoId = trailerId,
+                        paused = paused,
+                        dipped = chooserOpen,
+                        onEnded = { trailer = TRAILER_ENDED },
+                        onFailed = { trailer = TRAILER_FAILED },
+                    )
+                }
             }
             // .tn-art::after: fade to the page colour on the left and at the bottom
             Box(
@@ -173,7 +205,10 @@ fun HeroCarousel(
                         WatchButton(
                             pick.watchLabel,
                             pick.watchOptions.map { it.monogram },
-                            onClick = { chooserOpen = true },
+                            onClick = {
+                                // One place to watch opens it straight away (tonight.js watchHtml); several open the chooser.
+                                if (pick.watchOptions.size > 1) chooserOpen = true else openLink(pick.watchOptions.firstOrNull()?.url)
+                            },
                             modifier = Modifier
                                 .then(if (entry != null) Modifier.focusRequester(entry) else Modifier)
                                 .onKeyEvent { e ->
@@ -214,7 +249,8 @@ fun HeroCarousel(
                 key(pick.id) {
                     ArtPlaceholder(
                         pick.title,
-                        Modifier
+                        url = pick.posterUrl,
+                        modifier = Modifier
                             .rise()
                             .width(Dimens.HeroPosterW)
                             .aspectRatio(4f / 5f)
@@ -227,12 +263,15 @@ fun HeroCarousel(
     }
 
     if (chooserOpen) {
-        val notWired = stringResource(R.string.not_wired_watch)
         OptionsDialog(
             title = stringResource(R.string.watch_now),
             rows = pick.watchOptions.map { OptionRow(it.id, it.service, it.kind, it.monogram, 0xFF26262EL) },
-            onPick = { chooserOpen = false; toast(notWired) },
+            onPick = { row -> chooserOpen = false; openLink(pick.watchOptions.firstOrNull { it.id == row.id }?.url) },
             onDismiss = { chooserOpen = false },
         )
     }
 }
+
+private const val TRAILER_PLAYING = 0
+private const val TRAILER_ENDED = 1
+private const val TRAILER_FAILED = 2

@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Loading screen status lines (from the Mac app's public/boot.js). Edit freely.
+     The first line always comes first; the rest are shuffled on every launch. One line every 1.7 s. -->
+<resources>
+    <string name="boot_first_line">Waking the serpents</string>
+    <string-array name="boot_lines">
+        <item>Weighing the Tomatometer</item>
+        <item>Turning spoilers to stone</item>
+        <item>Treading the abyss</item>
+        <item>Coiling the serpents</item>
+        <item>Hissing at the end credits</item>
+        <item>Shedding last night’s skin</item>
+        <item>Meeting the gaze</item>
+        <item>Counting the fangs</item>
+        <item>Opening a hundred unblinking eyes</item>
+        <item>Stirring the nest</item>
+        <item>Tasting the air for fear</item>
+        <item>Turning the curious to stone</item>
+        <item>Untangling the coils</item>
+        <item>Checking under the bed</item>
+        <item>Locking the cabin door</item>
+        <item>Ignoring the knock at the door</item>
+        <item>Splitting up to search the house</item>
+        <item>Answering the unknown caller</item>
+        <item>Following the strange noise</item>
+        <item>Playing the cursed tape</item>
+        <item>Hearing footsteps upstairs</item>
+        <item>Saying her name three times</item>
+        <item>Lighting the last candle</item>
+    </string-array>
+</resources>

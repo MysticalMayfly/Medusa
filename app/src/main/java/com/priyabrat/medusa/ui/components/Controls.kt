@@ -1,5 +1,7 @@
 package com.priyabrat.medusa.ui.components
 
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.ui.res.painterResource
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
@@ -129,7 +131,16 @@ fun Monogram(text: String, argb: Long?, size: Dp, modifier: Modifier = Modifier)
             .background(argb?.let { Color(it) } ?: MedusaColors.Line2),
         contentAlignment = Alignment.Center,
     ) {
-        Text(text, color = Color.White, fontSize = (size.value * 0.42f).sp, fontWeight = FontWeight.ExtraBold, maxLines = 1)
+        val logo = Logos.forKey(text)
+        if (logo != null) {
+            androidx.compose.foundation.Image(
+                painterResource(logo), contentDescription = null,
+                contentScale = androidx.compose.ui.layout.ContentScale.Fit,
+                modifier = Modifier.padding(size * 0.14f).fillMaxSize(),
+            )
+        } else {
+            Text(Logos.letters(text), color = Color.White, fontSize = (size.value * 0.42f).sp, fontWeight = FontWeight.ExtraBold, maxLines = 1)
+        }
     }
 }
 
@@ -254,8 +265,8 @@ fun RatingBadge(rating: Rating) {
             RatingKind.Imdb -> Box(
                 Modifier.clip(RoundedSmall).background(MedusaColors.Imdb).padding(horizontal = 3.dp, vertical = 1.dp),
             ) { Text("IMDb", color = Color.Black, fontSize = 8.sp, fontWeight = FontWeight.ExtraBold) }
-            RatingKind.RtFresh -> Box(Modifier.size(9.dp).clip(CircleShape).background(Color(0xFFFA320A)))
-            RatingKind.RtRotten -> Box(Modifier.size(9.dp).clip(CircleShape).background(Color(0xFF0AC855)))
+            RatingKind.RtFresh -> androidx.compose.foundation.Image(painterResource(com.priyabrat.medusa.R.drawable.logo_rt_fresh), null, Modifier.size(11.dp))
+            RatingKind.RtRotten -> androidx.compose.foundation.Image(painterResource(com.priyabrat.medusa.R.drawable.logo_rt_rotten), null, Modifier.size(11.dp))
             RatingKind.Star -> Text("★", color = MedusaColors.Warning, fontSize = 10.sp)
         }
         Text(rating.value, color = MedusaColors.Fg, fontFamily = GeistMono, fontSize = 11.sp, fontWeight = FontWeight.Medium)

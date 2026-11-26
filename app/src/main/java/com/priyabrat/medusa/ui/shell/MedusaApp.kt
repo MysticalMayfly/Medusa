@@ -22,6 +22,7 @@ import com.priyabrat.medusa.ui.browse.BrowseActions
 import com.priyabrat.medusa.ui.browse.BrowseScreen
 import com.priyabrat.medusa.ui.components.HeroActions
 import com.priyabrat.medusa.ui.components.LocalToast
+import com.priyabrat.medusa.ui.components.LocalTrailersPaused
 import com.priyabrat.medusa.ui.components.ToastState
 import com.priyabrat.medusa.ui.detail.DetailActions
 import com.priyabrat.medusa.ui.detail.DetailPanel
@@ -33,6 +34,12 @@ import com.priyabrat.medusa.ui.model.BrowseKind
 import com.priyabrat.medusa.ui.model.BrowseUiState
 import com.priyabrat.medusa.ui.model.HomeUiState
 import com.priyabrat.medusa.ui.model.HorrorUiState
+import com.priyabrat.medusa.ui.model.ProfilePageState
+import com.priyabrat.medusa.ui.model.ProfilesUiState
+import com.priyabrat.medusa.ui.profiles.ProfileActions
+import com.priyabrat.medusa.ui.profiles.ProfileEditDialog
+import com.priyabrat.medusa.ui.profiles.ProfileScreen
+import com.priyabrat.medusa.ui.profiles.WhoIsWatchingScreen
 import com.priyabrat.medusa.ui.model.SearchUiState
 import com.priyabrat.medusa.ui.model.SettingsUiState
 import com.priyabrat.medusa.ui.model.Tab
@@ -52,6 +59,8 @@ sealed interface Screen {
     data class Universe(val id: String) : Screen
     data object Search : Screen
     data object Settings : Screen
+    data object Profiles : Screen
+    data class Profile(val id: String) : Screen
 }
 
 /**
@@ -60,7 +69,7 @@ sealed interface Screen {
  * Screens get state from [repo] and send actions back to it; they never fetch anything themselves.
  */
 @Composable
-fun MedusaApp(repo: MedusaRepository, settings: SettingsUiState, onUpdateButton: () -> Unit) {
+fun MedusaApp(repo: MedusaRepository, settings: SettingsUiState, onUpdateButton: () -> Unit, onImportButton: () -> Unit) {
     val stack = remember { mutableStateListOf<Screen>(Screen.Top(Tab.Home)) }
     val screen = stack.last()
     var panelId by remember { mutableStateOf<String?>(null) }
@@ -69,6 +78,9 @@ fun MedusaApp(repo: MedusaRepository, settings: SettingsUiState, onUpdateButton:
     val headerFocus = remember { HeaderFocus() }
     val settingsButton = remember { FocusRequester() }
     val searchField = remember { FocusRequester() }
+    val profiles by remember(repo) { repo.profiles() }.collectAsState(ProfilesUiState())
+    var editing by remember { mutableStateOf<String?>(null) }    // profile id, or NEW_PROFILE
+    var askedWho by remember { mutableStateOf(false) }
 
     fun go(to: Screen) {
         if (to is Screen.Top) { stack.clear(); stack.add(to) } else if (stack.last() != to) stack.add(to)
@@ -91,6 +103,8 @@ fun MedusaApp(repo: MedusaRepository, settings: SettingsUiState, onUpdateButton:
             onSettings = { go(Screen.Settings) },
             updateWaiting = settings.updateWaiting,
             focus = headerFocus,
+            profile = profiles.current,
+            onProfile = { profiles.current?.let { go(Screen.Profile(it.id)) } },
         )
     }
 
@@ -100,7 +114,7 @@ fun MedusaApp(repo: MedusaRepository, settings: SettingsUiState, onUpdateButton:
     val open: (String) -> Unit = remember { { panelId = it } }
     val hero = remember(repo) { HeroActions(onOpen = open, onInterested = repo::setInterested, onSeen = repo::setWatched) }
 
-    CompositionLocalProvider(LocalToast provides toast::show) {
+    CompositionLocalProvider(LocalToast provides toast::show, LocalTrailersPaused provides (panelId != null)) {
         // No background here: the window background (themes.xml window_bg, the same colour) already
         // paints it. Painting it twice cost the TV's GPU a full-screen fill on every frame.
         Box(Modifier.fillMaxSize()) {
@@ -109,7 +123,10 @@ fun MedusaApp(repo: MedusaRepository, settings: SettingsUiState, onUpdateButton:
                     Tab.Home -> {
                         val state by remember { repo.home() }.collectAsState(HomeUiState())
                         val actions = remember(repo) {
-                            HomeActions(hero, open, repo::markEpisodeWatched, onSeeAll = { go(Screen.Top(Tab.Horror)) })
+                            HomeActions(hero, open, repo::markEpisodeWatched, onSeeAll = {
+                                repo.selectFilter(FilterKeys.HORROR, FilterKeys.GROUP_SEE_ALL, it)
+                                go(Screen.Top(Tab.Horror))
+                            })
                         }
                         HomeScreen(state, actions, header)
                     }
@@ -140,7 +157,7 @@ fun MedusaApp(repo: MedusaRepository, settings: SettingsUiState, onUpdateButton:
                                 onSeenSegment = { repo.selectFilter(h, FilterKeys.GROUP_SEGMENT, it) },
                                 onWhere = { repo.selectFilter(h, FilterKeys.GROUP_WHERE, it) },
                                 onSelect = { sel, opt -> repo.selectFilter(h, FilterKeys.select(sel), opt) },
-                                onSeeAll = { repo.selectFilter(h, FilterKeys.GROUP_TAB, "all") },
+                                onSeeAll = { repo.selectFilter(h, FilterKeys.GROUP_SEE_ALL, it) },
                             )
                         }
                         HorrorScreen(state, actions, header)
@@ -168,9 +185,37 @@ fun MedusaApp(repo: MedusaRepository, settings: SettingsUiState, onUpdateButton:
                     val state by remember(query) { repo.search(query) }.collectAsState(SearchUiState(query))
                     SearchScreen(state, onQuery = { query = it }, onOpen = open, header = header, fieldFocus = searchField)
                 }
-                Screen.Settings -> SettingsScreen(settings, onUpdateButton, header, settingsButton)
+                Screen.Settings -> SettingsScreen(settings, onUpdateButton, onImportButton, header, settingsButton)
+                Screen.Profiles -> WhoIsWatchingScreen(
+                    profiles,
+                    onPick = { repo.switchProfile(it); go(Screen.Top(Tab.Home)) },
+                    onAdd = { editing = NEW_PROFILE },
+                )
+                is Screen.Profile -> {
+                    val state by remember(s.id) { repo.profilePage(s.id) }.collectAsState(ProfilePageState(s.id))
+                    val actions = remember(repo) {
+                        ProfileActions(
+                            onOpen = open,
+                            onSwitch = { repo.switchProfile(it) },
+                            onEdit = { editing = it },
+                            onAllProfiles = { go(Screen.Profiles) },
+                        )
+                    }
+                    ProfileScreen(state, actions, header)
+                }
             }
             toast.Host()
+        }
+
+        editing?.let { id ->
+            val start = profiles.profiles.firstOrNull { it.id == id }
+            ProfileEditDialog(
+                start = start,
+                canDelete = start != null && profiles.profiles.size > 1,
+                onSave = { name, avatar -> repo.saveProfile(start?.id, name, avatar); editing = null },
+                onDelete = { repo.deleteProfile(id); editing = null; go(Screen.Profiles) },
+                onDismiss = { editing = null },
+            )
         }
 
         panelId?.let { id ->
@@ -183,6 +228,11 @@ fun MedusaApp(repo: MedusaRepository, settings: SettingsUiState, onUpdateButton:
         }
     }
 
+    // "Who's watching?" once per launch, when there is more than one profile.
+    LaunchedEffect(profiles.profiles.size) {
+        if (!askedWho && profiles.profiles.size > 1) { askedWho = true; go(Screen.Profiles) }
+    }
+
     // Put focus somewhere sensible whenever the screen changes (the old screen's focused element is gone).
     LaunchedEffect(screen) {
         // Home starts on its tab so the carousel keeps turning; it waits while focus is inside it.
@@ -191,8 +241,12 @@ fun MedusaApp(repo: MedusaRepository, settings: SettingsUiState, onUpdateButton:
             is Screen.Universe -> headerFocus.tabs.getValue(Tab.Universes).requestWhenReady()
             Screen.Search -> searchField.requestWhenReady()
             Screen.Settings -> settingsButton.requestWhenReady()
+            Screen.Profiles -> Unit                       // the picker focuses its first profile itself
+            is Screen.Profile -> Unit                     // the page focuses its first button itself
         }
     }}
+
+private const val NEW_PROFILE = "new"
 
 /** Focus a control as soon as it is on screen (screens fill in a moment after they open). */
 private suspend fun FocusRequester.requestWhenReady() {

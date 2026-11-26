@@ -77,7 +77,7 @@ fun UniverseScreen(state: UniverseUiState, actions: UniverseActions, header: @Co
                     .border(1.dp, MedusaColors.Line, Shapes.Hero)
                     .rise(),
             ) {
-                ArtPlaceholder(null, Modifier.matchParentSize(), tint = Color(0xFF1A1A24))
+                ArtPlaceholder(null, Modifier.matchParentSize(), tint = Color(0xFF1A1A24), url = state.backdropUrl)
                 Box(Modifier.matchParentSize().background(Brush.horizontalGradient(0f to MedusaColors.Bg, 0.45f to MedusaColors.Bg.copy(alpha = 0.7f), 1f to Color.Transparent)))
                 Column(Modifier.padding(Dimens.Gap22), verticalArrangement = Arrangement.spacedBy(Dimens.Gap8)) {
                     LinkPill("← " + stringResource(R.string.all_universes), actions.onBack)
@@ -140,7 +140,7 @@ private fun EntryRow(e: UniverseEntry, actions: UniverseActions) {
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(Dimens.Gap12),
         ) {
-            ArtPlaceholder(null, Modifier.width(30.dp).aspectRatio(2f / 3f).clip(RoundedCornerShape(4.dp)))
+            ArtPlaceholder(null, Modifier.width(30.dp).aspectRatio(2f / 3f).clip(RoundedCornerShape(4.dp)), url = e.posterUrl)
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     if (e.upNext) {

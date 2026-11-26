@@ -4,6 +4,8 @@ import com.priyabrat.medusa.ui.model.BrowseKind
 import com.priyabrat.medusa.ui.model.BrowseUiState
 import com.priyabrat.medusa.ui.model.HomeUiState
 import com.priyabrat.medusa.ui.model.HorrorUiState
+import com.priyabrat.medusa.ui.model.ProfilePageState
+import com.priyabrat.medusa.ui.model.ProfilesUiState
 import com.priyabrat.medusa.ui.model.SearchUiState
 import com.priyabrat.medusa.ui.model.TitleDetail
 import com.priyabrat.medusa.ui.model.UniverseUiState
@@ -32,6 +34,14 @@ interface MedusaRepository {
     /** Continue watching: tick the next episode. */
     fun markEpisodeWatched(id: String)
 
+    fun profiles(): Flow<ProfilesUiState>
+    fun profilePage(id: String): Flow<ProfilePageState>
+    /** Watched, Interested and progress follow the profile in use. */
+    fun switchProfile(id: String)
+    /** Adds a profile (id null) or changes one; returns its id. */
+    fun saveProfile(id: String?, name: String, avatar: Int): String
+    fun deleteProfile(id: String)
+
     /** Pick one option in a filter group, e.g. screen "movies", group "platform", option "p2". */
     fun selectFilter(screen: String, group: String, optionId: String)
     /** Flip an on/off filter, e.g. screen "movies", flag "unwatched". */
@@ -46,6 +56,8 @@ object FilterKeys {
     const val GROUP_SORT = "sort"
     const val GROUP_TAB = "tab"
     const val GROUP_WHERE = "where"
+    /** "See all" on a shelf: the option id is the shelf id, the repository opens the matching wall. */
+    const val GROUP_SEE_ALL = "seeAll"
     const val FLAG_UNWATCHED = "unwatched"
     const val FLAG_HIDE_WATCHED = "hideWatched"
 

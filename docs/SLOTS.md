@@ -8,6 +8,27 @@ repository behind `data/MedusaRepository.kt`; no screen code changes.
 - **Must match** lists other slots that show the same fact. These are the numbers that disagree in the Mac app: one source each.
 - State classes are in `ui/model/UiState.kt`. Values arrive ready to show: screens never count, sum, sort or shuffle.
 
+## Stage 2 source (from b10)
+
+Every slot is filled by `data/LibraryRepository.kt` from one cached copy of the central catalogue, so a fact that
+shows on two screens comes from the same row. The catalogue is the Supabase view `app_titles` (plus `services` and
+`platforms`), defined in `scripts/catalogue/schema.sql` and built on the Mac by `scripts/catalogue/build_catalogue.py`
+from `~/Desktop/Films/medusa.fixed.csv` and `tv_shows.csv` plus TMDB. The TV caches it (`catalogue.json`) and
+refreshes it every 6 hours or from Settings. Watched, Interested and episode progress are the TV's own
+(`changes.json`), never in Supabase. The page logic is the Mac app's, ported: `app.js` (walls, filters, details,
+progress), `tonight.js` (carousel playlist, Home shelves, Watch now), `horror-stream.js`, `universes.js`.
+Horror year walls are the horror films of each of the last six years, best reviewed first.
+
+| Added field | What it shows | Source |
+|---|---|---|
+| `TitleCard.posterUrl`, `HeroPick.posterUrl`, `TitleDetail.posterUrl`, `UniverseEntry.posterUrl` | Poster | `app_titles.poster` (TMDB w342) |
+| `HeroPick.backdropUrl`, `ContinueItem.backdropUrl`, `TitleDetail.backdropUrl`, `UniverseUiState.backdropUrl` | Backdrop | `app_titles.backdrop` (TMDB w1280) |
+| `UniverseTile.posterUrls` | Poster fan on a tile | up to 5 posters of the universe, up next first |
+| `WatchOption.url` | Opens the service's app | `app_titles.watch[].url` (JustWatch) |
+| `TitleDetail.links[]` (`Link`) | TMDB, IMDb, Where to watch | ids in `app_titles` |
+| `TitleDetail.trailerUrl`, `HeroPick.trailerId` | Trailer | `app_titles.trailer_key` |
+| `settings.libraryStatus`, `.importLabel`, `.importEnabled` | Catalogue size, last update, Refresh button | `MainActivity` (catalogue cache) |
+
 ## Shared pieces
 
 | Slot ID | What it shows | Example | Type | Must match | State field | Source |

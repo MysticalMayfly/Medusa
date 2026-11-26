@@ -12,12 +12,15 @@ import com.priyabrat.medusa.ui.model.BrowseKind
 import com.priyabrat.medusa.ui.model.BrowseUiState
 import com.priyabrat.medusa.ui.model.ContinueItem
 import com.priyabrat.medusa.ui.model.Fact
+import com.priyabrat.medusa.ui.model.Link
 import com.priyabrat.medusa.ui.model.FilterOption
 import com.priyabrat.medusa.ui.model.FilterSelect
 import com.priyabrat.medusa.ui.model.HeroPick
 import com.priyabrat.medusa.ui.model.HomeUiState
 import com.priyabrat.medusa.ui.model.HorrorUiState
 import com.priyabrat.medusa.ui.model.HorrorWall
+import com.priyabrat.medusa.ui.model.ProfilePageState
+import com.priyabrat.medusa.ui.model.ProfilesUiState
 import com.priyabrat.medusa.ui.model.PlatformProgress
 import com.priyabrat.medusa.ui.model.ProgressSummary
 import com.priyabrat.medusa.ui.model.Rating
@@ -289,7 +292,7 @@ class FakeMedusaRepository : MedusaRepository {
             ),
             streaming = listOf(ServiceTag("Platform A · your plan", mine = true, argb = platforms[0].argb), ServiceTag("Platform B", mine = false, argb = platforms[1].argb)),
             rentPrices = listOf(Fact("Platform C", "Rent ₹00"), Fact("Platform D", "Buy ₹000")),
-            links = listOf("IMDb", "Where to watch (IN)"),
+            links = listOf(Link("IMDb", "https://www.imdb.com/"), Link("Where to watch (IN)", "https://www.justwatch.com/in")),
             watched = id in c.watched,
             interested = id in c.interested,
             hasTrailer = true,
@@ -312,6 +315,12 @@ class FakeMedusaRepository : MedusaRepository {
 
     override fun markEpisodeWatched(id: String) =
         state.update { it.copy(episodes = it.episodes + (id to ((it.episodes[id] ?: 0) + 1))) }
+
+    override fun profiles(): Flow<ProfilesUiState> = kotlinx.coroutines.flow.flowOf(ProfilesUiState())
+    override fun profilePage(id: String): Flow<ProfilePageState> = kotlinx.coroutines.flow.flowOf(ProfilePageState(id))
+    override fun switchProfile(id: String) {}
+    override fun saveProfile(id: String?, name: String, avatar: Int): String = id ?: "p1"
+    override fun deleteProfile(id: String) {}
 
     override fun selectFilter(screen: String, group: String, optionId: String) =
         state.update { it.copy(selected = it.selected + (key(screen, group) to optionId)) }

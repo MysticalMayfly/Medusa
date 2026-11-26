@@ -44,7 +44,7 @@ import com.priyabrat.medusa.R
 import com.priyabrat.medusa.ui.components.ArtPlaceholder
 import com.priyabrat.medusa.ui.components.IconCircle
 import com.priyabrat.medusa.ui.components.LinkPill
-import com.priyabrat.medusa.ui.components.LocalToast
+import com.priyabrat.medusa.ui.components.rememberOpenLink
 import com.priyabrat.medusa.ui.components.MedusaIcons
 import com.priyabrat.medusa.ui.components.Pill
 import com.priyabrat.medusa.ui.components.RatingBadge
@@ -73,7 +73,7 @@ fun DetailPanel(detail: TitleDetail?, actions: DetailActions, onClose: () -> Uni
         onDismissRequest = onClose,
         properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false),
     ) {
-        val toast = LocalToast.current
+        val openLink = rememberOpenLink()
         val shown = remember { MutableTransitionState(false).apply { targetState = true } }
         val first = remember { FocusRequester() }
         Box(Modifier.fillMaxSize().background(MedusaColors.Scrim), contentAlignment = Alignment.CenterEnd) {
@@ -91,7 +91,7 @@ fun DetailPanel(detail: TitleDetail?, actions: DetailActions, onClose: () -> Uni
                 ) {
                     // .hero-img with the close button
                     Box(Modifier.fillMaxWidth().height(Dimens.PanelArtH)) {
-                        ArtPlaceholder(null, Modifier.fillMaxSize(), tint = Color(0xFF1C2230))
+                        ArtPlaceholder(null, Modifier.fillMaxSize(), tint = Color(0xFF1C2230), url = detail?.backdropUrl)
                         Box(Modifier.fillMaxSize().background(Brush.verticalGradient(0.2f to Color.Transparent, 0.98f to MedusaColors.Panel)))
                         IconCircle(MedusaIcons.Close, onClose, Modifier.align(Alignment.TopEnd).padding(12.dp), size = 26.dp)
                     }
@@ -102,7 +102,8 @@ fun DetailPanel(detail: TitleDetail?, actions: DetailActions, onClose: () -> Uni
                         Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(Dimens.Gap12)) {
                             ArtPlaceholder(
                                 null,
-                                Modifier.width(Dimens.PanelPosterW).aspectRatio(2f / 3f).clip(RoundedCornerShape(9.dp)).border(1.dp, MedusaColors.Line, RoundedCornerShape(9.dp)),
+                                url = detail.posterUrl,
+                                modifier = Modifier.width(Dimens.PanelPosterW).aspectRatio(2f / 3f).clip(RoundedCornerShape(9.dp)).border(1.dp, MedusaColors.Line, RoundedCornerShape(9.dp)),
                             )
                             Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
                                 Text(detail.kindLine, style = MedusaType.Small)
@@ -125,8 +126,7 @@ fun DetailPanel(detail: TitleDetail?, actions: DetailActions, onClose: () -> Uni
                                 icon = if (detail.interested) MedusaIcons.HeartFilled else MedusaIcons.Heart,
                             )
                             if (detail.hasTrailer) {
-                                val later = stringResource(R.string.not_wired_trailer)
-                                Pill(stringResource(R.string.trailer), { toast(later) }, icon = MedusaIcons.Play)
+                                Pill(stringResource(R.string.trailer), { openLink(detail.trailerUrl) }, icon = MedusaIcons.Play)
                             }
                         }
                         Row(horizontalArrangement = Arrangement.spacedBy(Dimens.Gap8)) { detail.ratings.forEach { RatingBadge(it) } }
@@ -154,9 +154,8 @@ fun DetailPanel(detail: TitleDetail?, actions: DetailActions, onClose: () -> Uni
                             }
                         }
                         // .links
-                        val linkLater = stringResource(R.string.not_wired_link)
                         FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                            detail.links.forEach { LinkPill("$it ↗", { toast(linkLater) }) }
+                            detail.links.forEach { link -> LinkPill("${link.label} ↗", { openLink(link.url) }) }
                         }
                     }
                 }

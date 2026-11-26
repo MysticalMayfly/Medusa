@@ -116,6 +116,7 @@ private fun UniverseTileCard(tile: UniverseTile, onOpen: (String) -> Unit, modif
                         .clip(RoundedCornerShape(5.dp))
                         .border(1.dp, MedusaColors.Line2, RoundedCornerShape(5.dp)),
                     tint = tint.copy(alpha = 0.5f),
+                    url = tile.posterUrls.getOrNull(n),
                 )
             }
         }

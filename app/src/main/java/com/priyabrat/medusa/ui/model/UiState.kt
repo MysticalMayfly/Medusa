@@ -22,6 +22,7 @@ data class TitleCard(
     val badge: String? = null,            // small label top-left of the poster
     val progress: Float? = null,          // 0..1 bar along the poster's bottom edge
     val dotArgb: Long? = null,            // coloured dot before the subtitle (Horror: streaming service)
+    val posterUrl: String? = null,        // TMDB poster; null shows the title on a plain card
 )
 
 /** One entry in the Watch now chooser. */
@@ -30,6 +31,7 @@ data class WatchOption(
     val service: String,                  // "Netflix"
     val monogram: String,                 // "NF", shown in place of a logo
     val kind: String,                     // "Your plan", "Rent ₹79"
+    val url: String? = null,              // opens the service's app (JustWatch watch link)
 )
 
 /** The carousel pick (Home, Movies, TV shows, Horror). */
@@ -46,6 +48,8 @@ data class HeroPick(
     val interested: Boolean,
     val seen: Boolean,
     val trailerId: String? = null,        // stage 2 / trailer milestone: YouTube id, plays behind the pick
+    val backdropUrl: String? = null,
+    val posterUrl: String? = null,
 )
 
 data class ContinueItem(
@@ -54,6 +58,7 @@ data class ContinueItem(
     val progress: Float,                  // 0..1
     val progressLabel: String,            // "S1 E2 done · next S1 E3"
     val nextLabel: String,                // "Watched S1 E3"
+    val backdropUrl: String? = null,
 )
 
 data class Shelf(
@@ -152,6 +157,7 @@ data class UniverseTile(
     val progress: Float,                  // 0..1
     val upNext: String,                   // "Up next: Sadako DX"
     val tintArgb: Long,
+    val posterUrls: List<String> = emptyList(),   // the fan of up to 5 posters on the tile
 )
 
 data class UniverseGroup(
@@ -175,6 +181,7 @@ data class UniverseEntry(
     val seen: Boolean,
     val upNext: Boolean,
     val services: List<ServiceTag>,
+    val posterUrl: String? = null,
 )
 
 data class UpNext(val id: String, val title: String, val meta: String)
@@ -189,11 +196,15 @@ data class UniverseUiState(
     val segments: List<FilterOption> = emptyList(),   // Everything / Movies / Shows
     val hideWatched: Boolean = false,
     val entries: List<UniverseEntry> = emptyList(),
+    val backdropUrl: String? = null,
 )
 
 data class ServiceTag(val name: String, val mine: Boolean, val argb: Long)
 
 data class Fact(val label: String, val value: String)
+
+/** A link in the details panel: "IMDb" and its web address. */
+data class Link(val label: String, val url: String)
 
 /** The details panel. */
 data class TitleDetail(
@@ -206,16 +217,41 @@ data class TitleDetail(
     val facts: List<Fact>,
     val streaming: List<ServiceTag>,      // where it streams in India
     val rentPrices: List<Fact>,           // service -> price
-    val links: List<String>,              // "IMDb", "Where to watch (IN)"
+    val links: List<Link>,                // "IMDb", "Where to watch (IN)"
     val watched: Boolean,
     val interested: Boolean,
     val hasTrailer: Boolean,
+    val trailerUrl: String? = null,       // YouTube page, opened in the YouTube app
+    val backdropUrl: String? = null,
+    val posterUrl: String? = null,
 )
 
 data class SearchUiState(
     val query: String = "",
     val resultLabel: String = "",
     val results: List<TitleCard> = emptyList(),
+)
+
+/** A profile: name and one of the built-in avatars (0 until AVATAR_COUNT). */
+data class ProfileTile(val id: String, val name: String, val avatar: Int, val active: Boolean)
+
+const val AVATAR_COUNT = 8
+
+/** Who's watching: every profile, and the one in use (its avatar sits in the header). */
+data class ProfilesUiState(
+    val profiles: List<ProfileTile> = emptyList(),
+    val current: ProfileTile? = null,
+)
+
+/** One profile's page: its Interested and Watched lists. */
+data class ProfilePageState(
+    val id: String = "",
+    val name: String = "",
+    val avatar: Int = 0,
+    val active: Boolean = false,
+    val stat: String = "",                // "18 watched · 6 interested · 2 shows in progress"
+    val interested: List<TitleCard> = emptyList(),
+    val watched: List<TitleCard> = emptyList(),
 )
 
 /** Settings: only the updater. Filled by MainActivity from Updater.State. */
@@ -226,4 +262,7 @@ data class SettingsUiState(
     val buttonEnabled: Boolean,
     val progressPercent: Int?,            // null hides the bar
     val updateWaiting: Boolean,           // shows a dot on the gear
+    val libraryStatus: String = "",       // "1638 titles, copied from the Mac on 26 Nov 2026"
+    val importLabel: String = "",         // "Import library from Mac"
+    val importEnabled: Boolean = true,
 )

@@ -21,3 +21,5 @@ keystore.properties
 /dist
 __pycache__/
 .idea/deviceHardwareInput.xml
+# Supabase project for the central catalogue (scripts/catalogue)
+/supabase.properties

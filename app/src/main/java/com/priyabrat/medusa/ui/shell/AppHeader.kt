@@ -63,6 +63,7 @@ class HeaderFocus(
     val tabs: Map<Tab, FocusRequester> = Tab.entries.associateWith { FocusRequester() },
     val search: FocusRequester = FocusRequester(),
     val settings: FocusRequester = FocusRequester(),
+    val profile: FocusRequester = FocusRequester(),
 )
 
 /**
@@ -79,6 +80,8 @@ fun AppHeader(
     updateWaiting: Boolean,
     focus: HeaderFocus,
     modifier: Modifier = Modifier,
+    profile: com.priyabrat.medusa.ui.model.ProfileTile? = null,
+    onProfile: () -> Unit = {},
 ) {
     Row(
         modifier
@@ -125,6 +128,13 @@ fun AppHeader(
         }
         Box(Modifier.weight(1f))
         IconCircle(MedusaIcons.Search, onSearch, Modifier.focusRequester(focus.search))
+        if (profile != null) {
+            // The profile in use: opens its page (switch, edit, its own lists).
+            val pf = rememberFocusable()
+            Box(
+                Modifier.focusRequester(focus.profile).focusRing(pf.focused.value, radius = Dimens.HeaderControl / 2, offset = 2.dp).tvClick(pf, onClick = onProfile),
+            ) { com.priyabrat.medusa.ui.profiles.Avatar(profile.avatar, profile.name, Dimens.HeaderControl) }
+        }
         IconCircle(MedusaIcons.Gear, onSettings, Modifier.focusRequester(focus.settings), dot = updateWaiting)
     }
 }

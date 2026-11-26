@@ -32,7 +32,7 @@ import com.priyabrat.medusa.ui.theme.Shapes
  * The button's wiring to the Updater stays in MainActivity (docs/RULES.md rule 11).
  */
 @Composable
-fun SettingsScreen(state: SettingsUiState, onUpdateButton: () -> Unit, header: @Composable () -> Unit, buttonFocus: FocusRequester) {
+fun SettingsScreen(state: SettingsUiState, onUpdateButton: () -> Unit, onImportButton: () -> Unit, header: @Composable () -> Unit, buttonFocus: FocusRequester) {
     Column(Modifier.fillMaxSize()) {
         header()
         Column(
@@ -62,6 +62,29 @@ fun SettingsScreen(state: SettingsUiState, onUpdateButton: () -> Unit, header: @
                         modifier = Modifier.padding(top = Dimens.Gap8).focusRequester(buttonFocus),
                         style = PillStyle.Primary,
                         enabled = state.buttonEnabled,
+                        height = 32.dp,
+                        textStyle = MedusaType.ControlStrong,
+                    )
+                }
+            }
+            // Library: the one-time copy of the Mac app's collection (scripts/export_library.py --serve on the Mac).
+            Column(verticalArrangement = Arrangement.spacedBy(Dimens.Gap12)) {
+                Text(stringResource(R.string.library), style = MedusaType.ShelfTitle)
+                Column(
+                    Modifier
+                        .width(360.dp)
+                        .clip(Shapes.Card)
+                        .background(MedusaColors.Surface)
+                        .border(1.dp, MedusaColors.Line, Shapes.Card)
+                        .padding(Dimens.Gap16),
+                    verticalArrangement = Arrangement.spacedBy(Dimens.Gap8),
+                ) {
+                    Text(state.libraryStatus, style = MedusaType.Body)
+                    Pill(
+                        state.importLabel,
+                        onClick = onImportButton,
+                        modifier = Modifier.padding(top = Dimens.Gap8),
+                        enabled = state.importEnabled,
                         height = 32.dp,
                         textStyle = MedusaType.ControlStrong,
                     )
