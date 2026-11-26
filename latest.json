@@ -1,7 +1,7 @@
 {
-  "versionCode": 9,
+  "versionCode": 10,
   "versionName": "1.3",
-  "apkUrl": "https://raw.githubusercontent.com/MysticalMayfly/medusa/updates/medusa-1.3-b9.apk",
-  "sha256": "83283adb97c7ac0f38ec8109506b023a31014a8867a2399ed4d18a77823cf13e",
-  "notes": "Smoother scrolling up and down Home and the other pages. The top carousel is painted once and reused while the page scrolls (it was painted 4 times per frame), and the background is no longer painted twice. Posters, progress bars and entering rows use fewer layers. A shelf's posters are built before it scrolls into view, not in the frame it appears. Medusa's own baseline profile is now in the APK (b8 only had the libraries' profiles)."
+  "apkUrl": "https://raw.githubusercontent.com/MysticalMayfly/medusa/updates/medusa-1.3-b10.apk",
+  "sha256": "09da5465a2ca7b77cf7539c1e110b7ee7faecc2d60b75e7947fde38da0602a63",
+  "notes": "The Mac app ported: real catalogue from the new central database (Supabase), kept in a cache on the TV and refreshed every 6 hours or from Settings. Profiles with Who's watching, each with its own Watched and Interested. Loading intro from the Mac. Carousel trailers. Real posters, backdrops and service, IMDb and Rotten Tomatoes logos. Watch now, Trailer and links open the TV apps."
 }
