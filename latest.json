@@ -1,7 +1,7 @@
 {
-  "versionCode": 26,
+  "versionCode": 27,
   "versionName": "1.3",
-  "apkUrl": "https://raw.githubusercontent.com/MysticalMayfly/medusa/updates/medusa-1.3-b26.apk",
-  "sha256": "dff18e88aea787b3eb1946cf708ea2be850fbe7d2aa601fa72aa78486db12a8e",
-  "notes": "Scan the sign-in QR code and sign in on your phone without typing a TV code. Existing account profiles and history remain linked."
+  "apkUrl": "https://raw.githubusercontent.com/MysticalMayfly/medusa/updates/medusa-1.3-b27.apk",
+  "sha256": "68065fea6b95adb75efce721327dbb442fd47e02ebe1556af11204543ad20e69",
+  "notes": "The carousel trailer plays in the top 800 pixels instead of the full screen, and the page below moves up to meet it, on every page with a carousel. The Medusa icon is the leftmost stop in the top bar, with a soft glow when selected (OK opens Home). The year, dot and runtime or seasons have narrow spaces between them."
 }
