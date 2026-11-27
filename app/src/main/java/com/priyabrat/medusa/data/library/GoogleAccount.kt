@@ -56,9 +56,27 @@ class GoogleAccount(private val context: Context) {
     /** Exchange the Google device-flow ID token without changing nonce settings for other clients. */
     suspend fun fromDeviceToken(idToken: String, accessToken: String?): Result = withContext(Dispatchers.IO) {
         val session = exchange(idToken, null, accessToken)
+        fromSession(session)
+    }
+
+    /** Only the TV has the PKCE verifier, so a captured authorization code is not sufficient to sign in. */
+    suspend fun fromPairingCode(code: String, verifier: String): Result = withContext(Dispatchers.IO) {
+        val c = URL("${BuildConfig.SUPABASE_URL.trimEnd('/')}/auth/v1/token?grant_type=pkce").openConnection() as HttpURLConnection
+        val session = try {
+            c.requestMethod = "POST"; c.doOutput = true; c.connectTimeout = 10_000; c.readTimeout = 20_000
+            c.setRequestProperty("apikey", BuildConfig.SUPABASE_KEY)
+            c.setRequestProperty("Content-Type", "application/json")
+            c.outputStream.use { it.write(JSONObject().put("auth_code", code).put("code_verifier", verifier).toString().toByteArray()) }
+            check(c.responseCode in 200..299) { "Could not finish sign-in. Please try again." }
+            JSONObject(c.inputStream.bufferedReader().use { it.readText() })
+        } finally { c.disconnect() }
+        fromSession(session)
+    }
+
+    private fun fromSession(session: JSONObject): Result {
         val user = session.getJSONObject("user")
         val metadata = user.optJSONObject("user_metadata") ?: JSONObject()
-        Result(
+        return Result(
             name = metadata.optString("full_name").ifEmpty { metadata.optString("name").ifEmpty { user.optString("email").substringBefore('@') } },
             photoUrl = metadata.optString("avatar_url").ifEmpty { metadata.optString("picture") }.ifEmpty { null },
             email = user.optString("email").ifEmpty { null }, userId = user.getString("id"),

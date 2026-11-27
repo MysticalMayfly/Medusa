@@ -31,17 +31,16 @@ fun TvSignInDialog(challenge: TvGoogleSignIn.Challenge?, onCancel: () -> Unit) {
         Column(Modifier.width(600.dp).background(MedusaColors.Bg, RoundedCornerShape(20.dp)).padding(32.dp),
             horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(16.dp)) {
             Text("Sign in to Medusa", style = MedusaType.PageTitle)
-            if (challenge == null) Text("Getting your sign-in code…", style = MedusaType.Body)
+            if (challenge == null) Text("Preparing your sign-in…", style = MedusaType.Body)
             else {
                 val qr = remember(challenge.url) {
                     val matrix = QRCodeWriter().encode(challenge.url, BarcodeFormat.QR_CODE, 320, 320)
                     val pixels = IntArray(320 * 320) { i -> if (matrix[i % 320, i / 320]) android.graphics.Color.BLACK else android.graphics.Color.WHITE }
                     Bitmap.createBitmap(pixels, 320, 320, Bitmap.Config.ARGB_8888).asImageBitmap()
                 }
-                Text("Scan with your phone, then enter this code:", style = MedusaType.Body, textAlign = TextAlign.Center)
+                Text("Scan with your phone and sign in with Google.", style = MedusaType.Body, textAlign = TextAlign.Center)
                 Image(qr, contentDescription = "QR code for Google sign-in", modifier = Modifier.size(200.dp).background(Color.White))
-                Text(challenge.code, style = MedusaType.PageTitle)
-                Text("Or visit ${challenge.url}", style = MedusaType.Body, textAlign = TextAlign.Center)
+                Text("Keep this screen open while you sign in.", style = MedusaType.Body, textAlign = TextAlign.Center)
             }
             Pill("Cancel", onCancel, Modifier.focusRequester(cancelFocus))
         }

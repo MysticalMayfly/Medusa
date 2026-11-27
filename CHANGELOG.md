@@ -8,6 +8,7 @@ If that build is then not published, remove its row.
 
 | Build | Version | Date | APK | Changes |
 |---|---|---|---|---|
+| b26 | 1.3 | 2026-11-27 | `medusa-1.3-b26.apk` | Scan the sign-in QR code and sign in on your phone without typing a TV code. Existing account profiles and history remain linked. |
 | b25 | 1.3 | 2026-11-27 | `medusa-1.3-b25.apk` | The app only says where a title streams. Home has a Streaming on row for each service (Netflix, JioHotstar and so on). Horror rows read Streaming on, and the summary counts titles streaming in India. Watch now labels say Streaming, Free, Rent or Buy, and every service tag looks the same. |
 | b24 | 1.3 | 2026-11-27 | `medusa-1.3-b24.apk` | Carousel titles of up to 22 characters show in full on one line at the same size; longer ones stop at 22 and end with an ellipsis. The dot between the year and the runtime sits closer. |
 | b23 | 1.3 | 2026-11-27 | `medusa-1.3-b23.apk` | One trailer player is built during the loading screen and reused, so entering the carousel or changing picks no longer stalls to create a new one. The carousel text and poster fade out and in instead of rising. A dot is back between the year and the runtime. Titles stay on one line at one size, ending with an ellipsis when too long, and the synopsis is always two lines, so every pick lines up the same. |
