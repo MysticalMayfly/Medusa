@@ -67,6 +67,7 @@ private object Boot {
     const val HOLD_MS = 15_000          // Prince, 2026-11-27: 15 s (the Mac waits 10 s, index.html bootWait)
     const val OUT_MS = 700              // .boot.out
     const val SHOW_APP_MS = 14_000      // compose the app under the intro shortly before it lifts away
+    const val TRAILER_WARMUP_MS = 5_000L // Prince, 2026-11-27: build the shared trailer player 5 s in
     const val LINE_MS = 1_700           // boot.js: one line every 1.7 s
     const val SWAP_MS = 260             // boot.js crossfade
     val bgInner = Color(0xFF0D1410)
@@ -117,6 +118,13 @@ fun BootScreen(showApp: () -> Unit, onDone: () -> Unit) {
         latestDone()
     }
     val t: () -> Float = { clock.value }
+
+    // Build the app's one trailer player while the intro plays, so the carousel never creates it on screen.
+    val warmContext = LocalContext.current
+    LaunchedEffect(Unit) {
+        delay(Boot.TRAILER_WARMUP_MS)
+        com.priyabrat.medusa.ui.components.SharedTrailerPlayer.warmUp(warmContext)
+    }
 
     // Status lines: the first always the same, the rest shuffled each launch.
     val context = LocalContext.current

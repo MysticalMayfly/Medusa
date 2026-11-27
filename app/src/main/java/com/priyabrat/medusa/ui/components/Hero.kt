@@ -282,24 +282,28 @@ fun HeroCarousel(
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
             Column(Modifier.widthIn(max = Dimens.HeroInfoMaxW), verticalArrangement = Arrangement.spacedBy(Dimens.Gap8)) {
-                key(pick.id) {
-                    // Only the text is rebuilt per slide; the buttons below stay, so focus stays on them while paging.
-                    Column(Modifier.rise(), verticalArrangement = Arrangement.spacedBy(Dimens.Gap8)) {
+                // Only the text is rebuilt per slide; the buttons below stay, so focus stays on them while paging.
+                // Prince, 2026-11-27: the old text fades out, then the new one fades in (no rise).
+                androidx.compose.animation.AnimatedContent(
+                    targetState = pick,
+                    contentKey = { it.id },
+                    transitionSpec = { slideFade() },
+                    contentAlignment = Alignment.BottomStart,
+                    label = "heroText",
+                ) { pick ->
+                    Column(verticalArrangement = Arrangement.spacedBy(Dimens.Gap8)) {
                         if (pick.eyebrow.isNotEmpty()) Text(pick.eyebrow.uppercase(), style = MedusaType.Eyebrow, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        // A long title gets a smaller size instead of pushing the lines above it into the top menu.
-                        Text(
-                            pick.title,
-                            style = if (pick.title.length > 22) MedusaType.HeroTitle.copy(fontSize = MedusaType.HeroTitle.fontSize * 0.72f, lineHeight = MedusaType.HeroTitle.lineHeight * 0.72f) else MedusaType.HeroTitle,
-                            maxLines = 2, overflow = TextOverflow.Ellipsis,
-                        )
+                        // One line at one size; a title that does not fit ends with an ellipsis, so every slide lines up.
+                        Text(pick.title, style = MedusaType.HeroTitle, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Dimens.Gap10)) {
-                            Text("${pick.year} ${pick.runtime}", style = MedusaType.MonoStrong)
+                            Text(listOf(pick.year, pick.runtime).filter { it.isNotBlank() }.joinToString(" · "), style = MedusaType.MonoStrong)
                             pick.ratings.forEach { RatingBadge(it) }
                         }
+                        // Always two lines tall (minLines), so the title sits at the same height on every slide.
                         // While the trailer plays the synopsis fades and folds away, so the title and the line under it
                         // slide down to sit just above Watch now instead of leaving a gap. Read in layout and draw only.
                         Text(
-                            pick.overview, style = MedusaType.Body, maxLines = 3, overflow = TextOverflow.Ellipsis,
+                            pick.overview, style = MedusaType.Body, minLines = 2, maxLines = 2, overflow = TextOverflow.Ellipsis,
                             modifier = Modifier
                                 .graphicsLayer { alpha = 1f - quietness; clip = true }
                                 .layout { m, c ->
@@ -353,12 +357,16 @@ fun HeroCarousel(
                     }
                 }
             if (showPoster) {
-                key(pick.id) {
+                androidx.compose.animation.AnimatedContent(
+                    targetState = pick,
+                    contentKey = { it.id },
+                    transitionSpec = { slideFade() },
+                    label = "heroPoster",
+                ) { pick ->
                     ArtPlaceholder(
                         pick.title,
                         url = pick.posterUrl,
                         modifier = Modifier
-                            .rise()
                             .graphicsLayer { alpha = stillAlpha }
                             .width(Dimens.HeroPosterW)
                             .aspectRatio(4f / 5f)
@@ -378,6 +386,13 @@ fun HeroCarousel(
         )
     }
 }
+
+/** A slide change: the old text and poster fade out, then the new ones fade in, in step with the backdrop's 700 ms. */
+private fun slideFade() = androidx.compose.animation.ContentTransform(
+    targetContentEnter = androidx.compose.animation.fadeIn(tween(400, delayMillis = 300)),
+    initialContentExit = androidx.compose.animation.fadeOut(tween(300)),
+    sizeTransform = androidx.compose.animation.SizeTransform(clip = false),
+)
 
 private const val TRAILER_PLAYING = 0
 private const val TRAILER_ENDED = 1

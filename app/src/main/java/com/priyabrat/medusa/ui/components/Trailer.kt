@@ -24,7 +24,6 @@ import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.viewinterop.AndroidView
-import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.pierfrancescosoffritti.androidyoutubeplayer.core.player.PlayerConstants
 import com.pierfrancescosoffritti.androidyoutubeplayer.core.player.YouTubePlayer
 import com.pierfrancescosoffritti.androidyoutubeplayer.core.player.listeners.AbstractYouTubePlayerListener
@@ -73,51 +72,37 @@ fun TrailerLayer(
     onShown: (Boolean) -> Unit = {},
 ) {
     val context = LocalContext.current
-    val lifecycle = LocalLifecycleOwner.current.lifecycle
     val ended by rememberUpdatedState(onEnded)
     val failed by rememberUpdatedState(onFailed)
     val isPaused by rememberUpdatedState(paused)
 
-    var player by remember { mutableStateOf<YouTubePlayer?>(null) }
+    // One player for the whole app (SharedTrailerPlayer): this layer only borrows it, so focusing the carousel or
+    // paging to the next pick no longer builds a new WebView (that stalled the TV for 130 to 170 ms).
+    val view = remember { SharedTrailerPlayer.warmUp(context) }
+    val player = SharedTrailerPlayer.player
     var second by remember { mutableFloatStateOf(0f) }
     var duration by remember { mutableFloatStateOf(0f) }
     var playingSince by remember { mutableFloatStateOf(-1f) }   // playback second when this run of playing began
     var errors by remember { mutableIntStateOf(0) }
     val alpha = remember { Animatable(0f) }
 
-    val view = remember {
-        YouTubePlayerView(context).apply {
-            enableAutomaticInitialization = false
-            // The player is a picture behind the pick, never a control: its WebView must not take the remote's focus
-            // (it did, and the D-pad then went nowhere after switching tabs).
-            isFocusable = false
-            isFocusableInTouchMode = false
-            descendantFocusability = ViewGroup.FOCUS_BLOCK_DESCENDANTS
-            layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
-            val options = IFramePlayerOptions.Builder(context)
-                .controls(0).rel(0).ivLoadPolicy(3).ccLoadPolicy(0).fullscreen(0).autoplay(0).mute(1)
-                .build()
-            initialize(object : AbstractYouTubePlayerListener() {
-                override fun onReady(youTubePlayer: YouTubePlayer) { player = youTubePlayer }
-                override fun onCurrentSecond(youTubePlayer: YouTubePlayer, second: Float) { this@apply.post { setSecond(second) } }
-                override fun onVideoDuration(youTubePlayer: YouTubePlayer, duration: Float) { this@apply.post { setDuration(duration) } }
-                override fun onStateChange(youTubePlayer: YouTubePlayer, state: PlayerConstants.PlayerState) { this@apply.post { setState(state) } }
-                // YouTube turns captions on by itself for a muted video (every trailer starts muted), whatever
-                // cc_load_policy says. Unload the captions module whenever it loads and whenever playback starts.
-                override fun onApiChange(youTubePlayer: YouTubePlayer) { this@apply.post { hideCaptions(this@apply) } }
-                override fun onError(youTubePlayer: YouTubePlayer, error: PlayerConstants.PlayerError) { android.util.Log.d("MedusaTrailer", "error $error"); this@apply.post { errors += 1 } }
-                // Setters reach the Compose state from the player's thread via post().
-                private fun setSecond(s: Float) { second = s }
-                private fun setDuration(d: Float) { duration = d }
-                private fun setState(st: PlayerConstants.PlayerState) {
-                    if (st == PlayerConstants.PlayerState.PLAYING) { hideCaptions(this@apply); if (playingSince < 0f) playingSince = second } else playingSince = -1f
-                }
-            }, false, options)
+    DisposableEffect(player) {
+        val p = player ?: return@DisposableEffect onDispose {}
+        val listener = object : AbstractYouTubePlayerListener() {
+            override fun onCurrentSecond(youTubePlayer: YouTubePlayer, second: Float) { view.post { setSecond(second) } }
+            override fun onVideoDuration(youTubePlayer: YouTubePlayer, duration: Float) { view.post { setDuration(duration) } }
+            override fun onStateChange(youTubePlayer: YouTubePlayer, state: PlayerConstants.PlayerState) { view.post { setState(state) } }
+            override fun onError(youTubePlayer: YouTubePlayer, error: PlayerConstants.PlayerError) { android.util.Log.d("MedusaTrailer", "error $error"); view.post { errors += 1 } }
+            // Setters reach the Compose state from the player's thread via post().
+            private fun setSecond(s: Float) { second = s }
+            private fun setDuration(d: Float) { duration = d }
+            private fun setState(st: PlayerConstants.PlayerState) {
+                if (st == PlayerConstants.PlayerState.PLAYING) { hideCaptions(view); if (playingSince < 0f) playingSince = second } else playingSince = -1f
+            }
         }
-    }
-    DisposableEffect(view) {
-        lifecycle.addObserver(view)
-        onDispose { lifecycle.removeObserver(view); view.release() }
+        p.addListener(listener)
+        // Leaving: stop listening and silence the shared player; the next layer loads its own video into it.
+        onDispose { p.removeListener(listener); p.setVolume(0); p.mute(); p.pause() }
     }
 
     // Load the trailer hidden and muted, a moment after the pick appears.
@@ -176,13 +161,62 @@ fun TrailerLayer(
         // Full size: the video surface ignores Compose scaling, so a half-size player scaled up only filled part of
         // the carousel and left the backdrop showing beside it.
         AndroidView(
-            factory = { view },
+            // The shared view may still sit in the previous pick's layer for a moment: take it from there.
+            factory = { (view.parent as? ViewGroup)?.removeView(view); view },
             modifier = Modifier
                 .requiredSize(w, h)
                 .focusProperties { canFocus = false }
                 .graphicsLayer { this.alpha = alpha.value },
         )
     }
+}
+
+/**
+ * The app's single trailer player. [warmUp] builds it and loads YouTube's player page; the loading screen calls it
+ * 5 s in, so the player is ready before Home shows. It lives until the activity is destroyed.
+ */
+object SharedTrailerPlayer {
+    private var view: YouTubePlayerView? = null
+    var player by mutableStateOf<YouTubePlayer?>(null)
+        private set
+
+    fun warmUp(context: android.content.Context): YouTubePlayerView {
+        view?.let { return it }
+        val activity = context.findActivity()
+        val v = YouTubePlayerView(activity).apply {
+            enableAutomaticInitialization = false
+            // The player is a picture behind the pick, never a control: its WebView must not take the remote's focus
+            // (it did, and the D-pad then went nowhere after switching tabs).
+            isFocusable = false
+            isFocusableInTouchMode = false
+            descendantFocusability = ViewGroup.FOCUS_BLOCK_DESCENDANTS
+            layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+            val options = IFramePlayerOptions.Builder(activity)
+                .controls(0).rel(0).ivLoadPolicy(3).ccLoadPolicy(0).fullscreen(0).autoplay(0).mute(1)
+                .build()
+            initialize(object : AbstractYouTubePlayerListener() {
+                override fun onReady(youTubePlayer: YouTubePlayer) { this@apply.post { if (view === this@apply) player = youTubePlayer } }
+                // YouTube turns captions on by itself for a muted video (every trailer starts muted), whatever
+                // cc_load_policy says. Unload the captions module whenever it loads and whenever playback starts.
+                override fun onApiChange(youTubePlayer: YouTubePlayer) { this@apply.post { hideCaptions(this@apply) } }
+            }, false, options)
+        }
+        view = v
+        activity.lifecycle.addObserver(v)
+        activity.lifecycle.addObserver(object : androidx.lifecycle.DefaultLifecycleObserver {
+            // The view releases itself on destroy (it observes the lifecycle too); forget it here.
+            override fun onDestroy(owner: androidx.lifecycle.LifecycleOwner) {
+                if (view === v) { view = null; player = null }
+            }
+        })
+        return v
+    }
+}
+
+private tailrec fun android.content.Context.findActivity(): androidx.activity.ComponentActivity = when (this) {
+    is androidx.activity.ComponentActivity -> this
+    is android.content.ContextWrapper -> baseContext.findActivity()
+    else -> error("No activity")
 }
 
 /** Turns YouTube's captions off in the player's page (the library has no call for it). */
