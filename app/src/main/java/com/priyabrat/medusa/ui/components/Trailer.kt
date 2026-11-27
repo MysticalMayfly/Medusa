@@ -102,12 +102,15 @@ fun TrailerLayer(
                 override fun onCurrentSecond(youTubePlayer: YouTubePlayer, second: Float) { this@apply.post { setSecond(second) } }
                 override fun onVideoDuration(youTubePlayer: YouTubePlayer, duration: Float) { this@apply.post { setDuration(duration) } }
                 override fun onStateChange(youTubePlayer: YouTubePlayer, state: PlayerConstants.PlayerState) { this@apply.post { setState(state) } }
+                // YouTube turns captions on by itself for a muted video (every trailer starts muted), whatever
+                // cc_load_policy says. Unload the captions module whenever it loads and whenever playback starts.
+                override fun onApiChange(youTubePlayer: YouTubePlayer) { this@apply.post { hideCaptions(this@apply) } }
                 override fun onError(youTubePlayer: YouTubePlayer, error: PlayerConstants.PlayerError) { android.util.Log.d("MedusaTrailer", "error $error"); this@apply.post { errors += 1 } }
                 // Setters reach the Compose state from the player's thread via post().
                 private fun setSecond(s: Float) { second = s }
                 private fun setDuration(d: Float) { duration = d }
                 private fun setState(st: PlayerConstants.PlayerState) {
-                    if (st == PlayerConstants.PlayerState.PLAYING) { if (playingSince < 0f) playingSince = second } else playingSince = -1f
+                    if (st == PlayerConstants.PlayerState.PLAYING) { hideCaptions(this@apply); if (playingSince < 0f) playingSince = second } else playingSince = -1f
                 }
             }, false, options)
         }
@@ -180,6 +183,21 @@ fun TrailerLayer(
                 .graphicsLayer { this.alpha = alpha.value },
         )
     }
+}
+
+/** Turns YouTube's captions off in the player's page (the library has no call for it). */
+private fun hideCaptions(root: android.view.View) {
+    val web = findWebView(root) ?: return
+    web.evaluateJavascript(
+        "try{player.setOption('captions','track',{});player.unloadModule('captions');player.unloadModule('cc');}catch(e){}",
+        null,
+    )
+}
+
+private fun findWebView(v: android.view.View): android.webkit.WebView? = when (v) {
+    is android.webkit.WebView -> v
+    is ViewGroup -> (0 until v.childCount).firstNotNullOfOrNull { findWebView(v.getChildAt(it)) }
+    else -> null
 }
 
 private suspend fun fadeVolume(p: YouTubePlayer, from: Int, to: Int) {

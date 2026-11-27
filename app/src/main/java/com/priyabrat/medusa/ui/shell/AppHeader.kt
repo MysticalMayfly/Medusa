@@ -11,9 +11,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.requiredSize
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -30,13 +28,14 @@ import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.graphics.TransformOrigin
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.res.colorResource
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
@@ -98,6 +97,8 @@ fun AppHeader(
     onProfile: () -> Unit = {},
     /** Down from the tab bar goes here (the carousel's main button) instead of the nearest thing below. */
     down: FocusRequester? = null,
+    /** 0 = full size, 1 = shrunk and faded (the carousel has focus). Read only while drawing. */
+    dip: () -> Float = { 0f },
 ) {
     Row(
         modifier
@@ -116,23 +117,39 @@ fun AppHeader(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(Dimens.Gap10),
     ) {
-        Box(
-            Modifier
-                .size(Dimens.Logo)
-                .clip(CircleShape)
-                .background(colorResource(R.color.bg_dark)),
-            contentAlignment = Alignment.Center,
+        // Left end: the Mac's rounded-square Medusa mark and the tabs. It shrinks toward its top-left corner.
+        Row(
+            Modifier.graphicsLayer {
+                val d = dip()
+                scaleX = 1f - BAR_SHRINK * d
+                scaleY = scaleX
+                alpha = 1f - BAR_FADE * d
+                transformOrigin = TransformOrigin(0f, 0f)
+            },
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(Dimens.Gap10),
         ) {
-            // The adaptive-icon foreground keeps its art in the middle 2/3, so draw it 1.5x and let the circle crop it.
             Image(
-                painter = painterResource(R.mipmap.ic_launcher_fg),
+                painter = painterResource(R.drawable.medusa_mark),
                 contentDescription = stringResource(R.string.app_name),
-                contentScale = ContentScale.Crop,
-                modifier = Modifier.requiredSize(Dimens.Logo * 1.5f),
+                contentScale = ContentScale.Fit,
+                modifier = Modifier.size(Dimens.Logo),
             )
+            TabBar(current, onTab, focus.tabs, down)
         }
-        TabBar(current, onTab, focus.tabs, down)
         Box(Modifier.weight(1f))
+        // Right end: search, profile and gear. It shrinks toward its top-right corner.
+        Row(
+            Modifier.graphicsLayer {
+                val d = dip()
+                scaleX = 1f - BAR_SHRINK * d
+                scaleY = scaleX
+                alpha = 1f - BAR_FADE * d
+                transformOrigin = TransformOrigin(1f, 0f)
+            },
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(Dimens.Gap10),
+        ) {
         IconCircle(MedusaIcons.Search, onSearch, Modifier.focusRequester(focus.search))
         if (profile != null) {
             // The profile in use: opens its page (switch, edit, its own lists).
@@ -142,8 +159,13 @@ fun AppHeader(
             ) { com.priyabrat.medusa.ui.profiles.Avatar(profile.avatar, profile.name, Dimens.HeaderControl, photoUrl = profile.photoUrl) }
         }
         IconCircle(MedusaIcons.Gear, onSettings, Modifier.focusRequester(focus.settings), dot = updateWaiting)
+        }
     }
 }
+
+/** While the carousel has focus each end of the bar shrinks this much toward its own screen edge, and fades this much. */
+private const val BAR_SHRINK = 0.1f
+private const val BAR_FADE = 0.55f
 
 /**
  * The tabs as a single focus target. Left and right move the pill one tab and open it at once, so every press

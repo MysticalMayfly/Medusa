@@ -296,9 +296,16 @@ fun HeroCarousel(
                             Text("${pick.year} ${pick.runtime}", style = MedusaType.MonoStrong)
                             pick.ratings.forEach { RatingBadge(it) }
                         }
+                        // While the trailer plays the synopsis fades and folds away, so the title and the line under it
+                        // slide down to sit just above Watch now instead of leaving a gap. Read in layout and draw only.
                         Text(
                             pick.overview, style = MedusaType.Body, maxLines = 3, overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.graphicsLayer { alpha = 1f - quietness },
+                            modifier = Modifier
+                                .graphicsLayer { alpha = 1f - quietness; clip = true }
+                                .layout { m, c ->
+                                    val p = m.measure(c)
+                                    layout(p.width, (p.height * (1f - quietness)).toInt()) { p.place(0, 0) }
+                                },
                         )
                     }
                 }

@@ -17,8 +17,9 @@ import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
-import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.foundation.focusGroup
 import com.priyabrat.medusa.data.FilterKeys
 import com.priyabrat.medusa.data.MedusaRepository
 import com.priyabrat.medusa.ui.browse.BrowseActions
@@ -109,6 +110,10 @@ fun MedusaApp(
     val searchField = remember { FocusRequester() }
     // The carousel's main button: where Down from the top menu goes on pages that have a carousel.
     val heroEntry = remember { FocusRequester() }
+    // The open page as one focus group: where Down from the top menu goes on pages without a carousel (More,
+    // Universes). The header sits above the pages, and their lists start at the top of the screen under it, so the
+    // remote's own search never found anything "below" the tabs there.
+    val pageFocus = remember { FocusRequester() }
     val profiles by remember(repo) { repo.profiles() }.collectAsState(ProfilesUiState())
 
     fun go(to: Screen) {
@@ -164,6 +169,7 @@ fun MedusaApp(
         // No background here: the window background (themes.xml window_bg, the same colour) already
         // paints it. Painting it twice cost the TV's GPU a full-screen fill on every frame.
         Box(Modifier.fillMaxSize()) {
+            Box(Modifier.fillMaxSize().focusRequester(pageFocus).focusGroup()) {
             when (val s = page) {
                 // Placeholder: holds the header's place until the page is built.
                 null -> if (screen != Screen.Profiles) header()
@@ -260,6 +266,7 @@ fun MedusaApp(
                     ProfileScreen(state, actions, header)
                 }
             }
+            }
             PageVeil(
                 pending = page == null,
                 alpha = veil.asState(),
@@ -285,18 +292,12 @@ fun MedusaApp(
                         else -> headerFocus.tabs
                     },
                     profile = profiles.current,
-                    down = heroEntry.takeIf { hasCarousel },
+                    down = if (hasCarousel) heroEntry else pageFocus,
                     onProfile = { profiles.current?.let { go(Screen.Profile(it.id)) } },
                     modifier = Modifier
                         .offset { androidx.compose.ui.unit.IntOffset(0, anchor.offsetY.toInt()) }
-                        .onFocusChanged { inHeader.value = it.hasFocus }
-                        .graphicsLayer {
-                            val d = barDip.value
-                            scaleX = 1f - BAR_SHRINK * d
-                            scaleY = scaleX
-                            alpha = 1f - BAR_FADE * d
-                            transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0.5f, 0f)
-                        },
+                        .onFocusChanged { inHeader.value = it.hasFocus },
+                    dip = { barDip.value },
                 )
             }
             toast.Host()
@@ -348,8 +349,6 @@ private const val EXIT_WINDOW_MS = 2_500L
 /** How long the remote must rest on a tab before its page is built. Quicker presses only move the pill. */
 private const val SETTLE_MS = 180L
 private const val FADE_MS = 200
-private const val BAR_SHRINK = 0.1f
-private const val BAR_FADE = 0.55f
 
 /** Things asked once per app process, not once per screen (coming back to Medusa doesn't ask again). */
 private object Session { var askedWho = false }

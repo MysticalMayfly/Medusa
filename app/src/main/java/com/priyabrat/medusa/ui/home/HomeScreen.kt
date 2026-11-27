@@ -93,7 +93,7 @@ fun HomeScreen(
     ) {
         item("hero") {
             Box {
-                HeroCarousel(state.picks, actions.hero, showPoster = false, entry = heroEntry)
+                HeroCarousel(state.picks, actions.hero, entry = heroEntry)
                 header()
             }
         }

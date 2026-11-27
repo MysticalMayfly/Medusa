@@ -58,15 +58,15 @@ import kotlinx.coroutines.isActive
 /*
  * The Medusa loading screen, ported from the Mac app (public/boot.css, boot.js, index.html).
  * Timeline in ms from launch, as in boot.css: aura 150, portrait 100, sheen 1450 (again 5500), eyes 1000 to 1950,
- * wordmark 1100, line 1800, status note 2000; it stays 10 s (index.html bootWait), then lifts away in 700 ms.
+ * wordmark 1100, line 1800, status note 2000; it stays 15 s, then lifts away in 700 ms.
  * Every value is read from one clock inside draw lambdas, so the animation redraws without recomposing.
  * Nothing loops after it ends: the screen leaves composition. Lines live in res/values/loading_lines.xml.
  */
 
 private object Boot {
-    const val HOLD_MS = 10_000          // index.html: window.bootWait = 10000
+    const val HOLD_MS = 15_000          // Prince, 2026-11-27: 15 s (the Mac waits 10 s, index.html bootWait)
     const val OUT_MS = 700              // .boot.out
-    const val SHOW_APP_MS = 9_000       // compose the app under the intro shortly before it lifts away
+    const val SHOW_APP_MS = 14_000      // compose the app under the intro shortly before it lifts away
     const val LINE_MS = 1_700           // boot.js: one line every 1.7 s
     const val SWAP_MS = 260             // boot.js crossfade
     val bgInner = Color(0xFF0D1410)
