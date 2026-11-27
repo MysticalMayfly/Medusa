@@ -92,7 +92,7 @@ private val heroTints = listOf(Color(0xFF1B1A26), Color(0xFF231719), Color(0xFF1
  * The carousel ("Tonight's pick", tonight.css .tn-hero): full-bleed backdrop with a slow 18 s zoom,
  * title, meta, ratings, synopsis and the buttons Watch now, Interested, More info, Seen it.
  * A still stays 8 s, then the next pick fades in; it waits while focus is inside the carousel.
- * Trailers play only while focus is inside; then the carousel grows to the full screen height.
+ * Trailers play only while focus is inside; then the carousel takes the trailer's height (TRAILER_H).
  * Left and right on Watch now page it; Left on Interested goes back, Right on Seen it forward.
  *
  * Trailers (stage 1 milestone 6) will play behind the pick here; [HeroPick.trailerId] is the hook.
@@ -188,10 +188,10 @@ fun HeroCarousel(
         remember { mutableFloatStateOf(1f) }
     }
 
-    // With focus inside, the carousel grows to the full screen height and pushes the shelves below further down.
-    val screenH = androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp.dp
+    // With focus inside, the carousel takes the trailer's height (Prince, 2026-11-27: it used to grow to the full
+    // screen), so the page below moves up to meet it. Every page's carousel (Home, Movies, TV shows, Horror) is this one.
     val grown by androidx.compose.animation.core.animateDpAsState(
-        if (focusInside) maxOf(height, screenH) else height, tween(Motion.ColorMs * 2), label = "heroHeight",
+        if (focusInside) TRAILER_H else height, tween(Motion.ColorMs * 2), label = "heroHeight",
     )
     Box(
         modifier
