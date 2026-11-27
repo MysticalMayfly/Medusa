@@ -1,7 +1,7 @@
 {
-  "versionCode": 21,
+  "versionCode": 22,
   "versionName": "1.3",
-  "apkUrl": "https://raw.githubusercontent.com/MysticalMayfly/medusa/updates/medusa-1.3-b21.apk",
-  "sha256": "994af79ff0b540627fe54262c4daba4b31bdf56de886bfa62ebda199bf1b8c1f",
-  "notes": "New top bar: left and right move one tab per press and open it, with an instant white pill and no lost presses; Up from a page lands on the open tab (or the avatar, search or gear on those pages). A light placeholder shows at once and the page fades in when you stop. The carousel plays trailers only while you are in it, then grows to full height and dims the top bar; otherwise it turns through the pictures. Its round buttons sit under Watch now; the arrows and dots are gone, and left and right on Watch now change the title. Year and runtime without the dot. The first shelf starts lower, peeking at the bottom."
+  "apkUrl": "https://raw.githubusercontent.com/MysticalMayfly/medusa/updates/medusa-1.3-b22.apk",
+  "sha256": "9be9e86c03ac5039a460f325e5d857ac432ea3bd304a8275bd7172729ca17ab4",
+  "notes": "The loading screen stays 15 seconds. When the carousel has focus, each end of the top bar shrinks toward its own corner. The top bar shows the square Medusa icon from the Mac app. During a trailer the synopsis folds away so the title sits just above Watch now. Down from the tabs now works on More and Universes. The Home carousel shows the poster again. Trailer subtitles are off."
 }
