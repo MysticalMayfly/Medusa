@@ -13,7 +13,7 @@ ever updated. Supabase only receives what this script pushes; the TV only reads 
     python3 scripts/catalogue/build_catalogue.py upkeep    # fetch + build + publish + sync
 
 Master tables, plain columns (no JSON blobs):
-  titles        one row per title: kind, tmdb_id, imdb_id, title, year, RT score. Only these come from the two CSVs
+  titles        one row per title: kind, tmdb_id, imdb_id, title, year, RT score, horror. Only these come from the two CSVs
                 (~/Desktop/Medusa/films.csv and tv_shows.csv).
   title_data    everything the app shows, fetched: TMDB (details, genres, art, trailers, Indian streaming), the Mac app's
                 database ~/Desktop/Medusa Mac/data/medusa.db where it has the title (IMDb and RT scores, trailer,
@@ -55,7 +55,7 @@ def master():
     c.execute('PRAGMA foreign_keys = ON')
     c.executescript(
         'CREATE TABLE IF NOT EXISTS titles (id INTEGER PRIMARY KEY, kind TEXT NOT NULL, tmdb_id INTEGER NOT NULL,'
-        ' imdb_id TEXT, title TEXT NOT NULL, year INTEGER, rt_score INTEGER, added_at TEXT NOT NULL);'
+        ' imdb_id TEXT, title TEXT NOT NULL, year INTEGER, rt_score INTEGER, added_at TEXT NOT NULL, horror INTEGER NOT NULL DEFAULT 0);'
         'CREATE TABLE IF NOT EXISTS title_data (id INTEGER PRIMARY KEY REFERENCES titles(id) ON DELETE CASCADE,'
         ' original_title TEXT, runtime INTEGER, countries TEXT, language TEXT,'
         ' imdb_rating REAL, imdb_votes INTEGER, tmdb_rating REAL, tmdb_votes INTEGER, rt_score INTEGER,'
@@ -139,14 +139,18 @@ def seed():
                 continue
             want[stable_id(kind, tid)] = (kind, int(tid), (r.get('imdb_id') or '').strip() or None,
                                          (r.get('title') or '').strip(), num((r.get('year') or '')[:4], int),
-                                         num(r.get('rotten_tomatoes'), int))
+                                         num(r.get('rotten_tomatoes'), int),
+                                         # films.csv is Prince's hand-compiled horror list: every film in it is horror.
+                                         # A show is horror when at least one horror source marks it.
+                                         1 if kind == 'movie' or (num(r.get('horror_sources'), int) or 0) > 0 else 0)
     have = {i for (i,) in c.execute('SELECT id FROM titles')}
     gone = have - set(want)
     c.executemany('DELETE FROM titles WHERE id=?', [(i,) for i in gone])
     stamp = now()
-    for i, (kind, tid, imdb, title, year, rt) in want.items():
-        c.execute('INSERT INTO titles (id, kind, tmdb_id, imdb_id, title, year, rt_score, added_at) VALUES (?,?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET imdb_id=excluded.imdb_id,'
-                  ' title=excluded.title, year=excluded.year, rt_score=excluded.rt_score', (i, kind, tid, imdb, title, year, rt, stamp))
+    for i, (kind, tid, imdb, title, year, rt, horror) in want.items():
+        c.execute('INSERT INTO titles (id, kind, tmdb_id, imdb_id, title, year, rt_score, horror, added_at) VALUES (?,?,?,?,?,?,?,?,?)'
+                  ' ON CONFLICT(id) DO UPDATE SET imdb_id=excluded.imdb_id, title=excluded.title, year=excluded.year,'
+                  ' rt_score=excluded.rt_score, horror=excluded.horror', (i, kind, tid, imdb, title, year, rt, horror, stamp))
     c.execute("INSERT OR IGNORE INTO profiles VALUES ('p1', 'Me', 0, NULL, ?)", (stamp,))
     for s in SERVICES:
         c.execute('INSERT OR IGNORE INTO services VALUES (?,?,?,?,?,?)', s)
@@ -290,14 +294,14 @@ def joined(xs):
 
 def build():
     c = master()
-    rows = c.execute('SELECT id, kind, tmdb_id, imdb_id, rt_score FROM titles ORDER BY id').fetchall()
+    rows = c.execute('SELECT id, kind, tmdb_id, imdb_id, rt_score, horror FROM titles ORDER BY id').fetchall()
     mac = mac_titles()
     imdb = imdb_ratings({r[3] for r in rows if r[3]})
     stamp = now()
     c.execute('DELETE FROM title_data')
     c.execute('DELETE FROM seasons')
     c.execute('DELETE FROM watch_offers')
-    for tid_, kind, tmdb_id, imdb_id, csv_rt in rows:
+    for tid_, kind, tmdb_id, imdb_id, csv_rt, csv_horror in rows:
         try:
             tm = json.load(open(cache_path(kind, tmdb_id)))
         except (OSError, ValueError):
@@ -330,7 +334,7 @@ def build():
             m.get('imdb_rating') or (ir[0] if ir else None), m.get('imdb_votes') or (ir[1] if ir else None),
             tm.get('vote_average') or None, tm.get('vote_count') or None,
             csv_rt if csv_rt is not None else m.get('rt_score'),
-            1 if 'Horror' in genres else 0,
+            csv_horror,
             joined(genres), franchise, tm.get('overview') or None, tm.get('tagline') or None,
             IMG + 'w342' + poster if poster else None, IMG + 'w1280' + backdrop if backdrop else None,
             trailer(tm, m.get('trailer_key')),
