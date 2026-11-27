@@ -13,7 +13,8 @@ repository behind `data/MedusaRepository.kt`; no screen code changes.
 Every slot is filled by `data/LibraryRepository.kt` from one cached copy of the central catalogue, so a fact that
 shows on two screens comes from the same row. The catalogue is the Supabase view `app_titles` (plus `services` and
 `platforms`), defined in `scripts/catalogue/schema.sql` and built on the Mac by `scripts/catalogue/build_catalogue.py`
-from `~/Desktop/Films/medusa.fixed.csv` and `tv_shows.csv` plus TMDB. The TV caches it (`catalogue.json`) and
+from the master database `~/Desktop/Medusa/medusa-master.db`. Its titles are exactly those in `~/Desktop/Films/films.csv`
+and `tv_shows.csv` (title, year and ids only). Everything else is fetched: TMDB, the Mac app's `medusa.db` and IMDb ratings. The TV caches it (`catalogue.json`) and
 refreshes it every 6 hours or from Settings. Watched, Interested and episode progress are the TV's own
 (`changes.json`), never in Supabase. The page logic is the Mac app's, ported: `app.js` (walls, filters, details,
 progress), `tonight.js` (carousel playlist, Home shelves, Watch now), `horror-stream.js`, `universes.js`.

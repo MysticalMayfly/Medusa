@@ -4,18 +4,23 @@
 The master database is ~/Desktop/Medusa/medusa-master.db: the single source of truth and the only copy that is
 ever updated. Supabase only receives what this script pushes; the TV only reads Supabase and keeps its own cache.
 
-    python3 scripts/catalogue/build_catalogue.py seed      # once: titles from ~/Desktop/Films (medusa.fixed.csv,
-                                                          #   tv_shows.csv) into the master; existing titles are kept
+    python3 scripts/catalogue/build_catalogue.py seed      # the master's titles = exactly the titles in ~/Desktop/Films
+                                                          #   (films.csv, tv_shows.csv); titles not in them are removed
     python3 scripts/catalogue/build_catalogue.py fetch     # TMDB details for every master title (cached, resumable)
-    python3 scripts/catalogue/build_catalogue.py build     # refresh the catalogue table in the master from source + TMDB
+    python3 scripts/catalogue/build_catalogue.py build     # fill title_data in the master: TMDB, the Mac app, IMDb
     python3 scripts/catalogue/build_catalogue.py publish   # push the catalogue to Supabase (service role key)
     python3 scripts/catalogue/build_catalogue.py sync      # profiles: devices' changes into the Master, then back out
     python3 scripts/catalogue/build_catalogue.py upkeep    # fetch + build + publish + sync
 
-Master tables: sources (one row per title, the CSV row it came from: edit here), catalogue (built, what Supabase gets),
-services, platforms. TMDB token: ~/Desktop/Films/.tmdb_key. Cache: ~/Desktop/Medusa/tmdb_cache/.
+Master tables, plain columns (no JSON blobs):
+  titles        one row per title: kind, tmdb_id, imdb_id, title, year. Only these come from the two CSVs.
+  title_data    everything the app shows, fetched: TMDB (details, genres, art, trailers, Indian streaming), the Mac app's
+                database ~/Desktop/Medusa Mac/data/medusa.db where it has the title (IMDb and RT scores, trailer,
+                direct watch links, franchise), and IMDb's public ratings file for the IMDb score of the rest.
+  seasons, watch_offers, services, platforms, meta, profiles, profile_titles, applied_events.
+TMDB token: ~/Desktop/Films/.tmdb_key. Cache: ~/Desktop/Medusa/tmdb_cache/.
 Supabase settings: ~/Desktop/Medusa/.supabase.env (never in this repo or the app).
-Personal data (what you watched) stays in sources and is NOT published: the view is readable with the app's public key.
+Lists in title_data (genres, countries, services, ...) are text joined with ' | '.
 Standard library only.
 """
 import csv
@@ -31,10 +36,12 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 
 FILMS_DIR = os.path.expanduser(os.environ.get('MEDUSA_FILMS_DIR', '~/Desktop/Films'))
-FILMS_CSV = os.path.join(FILMS_DIR, 'medusa.fixed.csv')
+FILMS_CSV = os.path.join(FILMS_DIR, 'films.csv')
 SHOWS_CSV = os.path.join(FILMS_DIR, 'tv_shows.csv')
 MASTER_DIR = os.path.expanduser(os.environ.get('MEDUSA_MASTER_DIR', '~/Desktop/Medusa'))
 MASTER = os.path.join(MASTER_DIR, 'medusa-master.db')
+MAC_DB = os.path.expanduser(os.environ.get('MEDUSA_MAC_DB', '~/Desktop/Medusa Mac/data/medusa.db'))
+IMDB_RATINGS = 'https://datasets.imdbws.com/title.ratings.tsv.gz'
 CACHE = os.path.join(MASTER_DIR, 'tmdb_cache')
 SCHEMA = os.path.join(os.path.dirname(__file__), 'schema.sql')
 
@@ -42,10 +49,23 @@ SCHEMA = os.path.join(os.path.dirname(__file__), 'schema.sql')
 def master():
     os.makedirs(MASTER_DIR, exist_ok=True)
     c = sqlite3.connect(MASTER)
+    c.execute('PRAGMA foreign_keys = ON')
     c.executescript(
-        'CREATE TABLE IF NOT EXISTS sources (id INTEGER PRIMARY KEY, kind TEXT NOT NULL, tmdb_id INTEGER NOT NULL, row TEXT NOT NULL,'
-        ' added_at TEXT NOT NULL, updated_at TEXT NOT NULL);'
-        'CREATE TABLE IF NOT EXISTS catalogue (id INTEGER PRIMARY KEY, data TEXT NOT NULL, built_at TEXT NOT NULL);'
+        'CREATE TABLE IF NOT EXISTS titles (id INTEGER PRIMARY KEY, kind TEXT NOT NULL, tmdb_id INTEGER NOT NULL,'
+        ' imdb_id TEXT, title TEXT NOT NULL, year INTEGER, added_at TEXT NOT NULL);'
+        'CREATE TABLE IF NOT EXISTS title_data (id INTEGER PRIMARY KEY REFERENCES titles(id) ON DELETE CASCADE,'
+        ' original_title TEXT, runtime INTEGER, countries TEXT, language TEXT,'
+        ' imdb_rating REAL, imdb_votes INTEGER, tmdb_rating REAL, tmdb_votes INTEGER, rt_score INTEGER,'
+        ' horror INTEGER NOT NULL DEFAULT 0, genres TEXT, franchise TEXT, overview TEXT, tagline TEXT,'
+        ' poster TEXT, backdrop TEXT, trailer_key TEXT,'
+        ' india_status TEXT, services TEXT, service_names TEXT, rent_buy TEXT, watch_page TEXT,'
+        ' networks TEXT, platform TEXT, tmdb_status TEXT,'
+        ' next_season INTEGER, next_episode INTEGER, next_airdate TEXT, prev_season INTEGER, prev_episode INTEGER, prev_airdate TEXT,'
+        ' built_at TEXT NOT NULL);'
+        'CREATE TABLE IF NOT EXISTS seasons (title_id INTEGER NOT NULL REFERENCES titles(id) ON DELETE CASCADE,'
+        ' season INTEGER NOT NULL, episodes INTEGER NOT NULL, PRIMARY KEY (title_id, season));'
+        'CREATE TABLE IF NOT EXISTS watch_offers (title_id INTEGER NOT NULL REFERENCES titles(id) ON DELETE CASCADE,'
+        ' code TEXT, pkg TEXT, name TEXT, type TEXT, url TEXT);'
         'CREATE TABLE IF NOT EXISTS services (code TEXT PRIMARY KEY, name TEXT, colour TEXT, mine INTEGER, free INTEGER, sort INTEGER);'
         'CREATE TABLE IF NOT EXISTS platforms (slug TEXT PRIMARY KEY, name TEXT, colour TEXT, sort INTEGER);'
         'CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT);'
@@ -104,38 +124,37 @@ def now():
 
 
 def seed():
-    """Titles from the two ~/Desktop/Films files into the master. Titles already in the master are left as they are."""
+    """The master's titles become exactly the titles in the two ~/Desktop/Films files (title, year, ids only: the other
+    CSV columns are not used). Titles no longer in the files are removed with their data."""
     c = master()
-    added = 0
+    want = {}
     for kind, path in (('movie', FILMS_CSV), ('show', SHOWS_CSV)):
         for r in read_csv(path):
+            r = {k.lstrip('\ufeff'): v for k, v in r.items()}
             tid = (r.get('tmdb_id') or '').strip()
             if not tid.isdigit():
                 continue
-            r = {k.lstrip('\ufeff'): v for k, v in r.items()}
-            cur = c.execute('INSERT OR IGNORE INTO sources VALUES (?,?,?,?,?,?)',
-                            (stable_id(kind, tid), kind, int(tid), json.dumps(r, ensure_ascii=False), now(), now()))
-            added += cur.rowcount
-    # The default profile, "Me", starts with what the Films files mark as watched.
-    if c.execute("INSERT OR IGNORE INTO profiles VALUES ('p1', 'Me', 0, NULL, ?)", (now(),)).rowcount:
-        for k, r in c.execute('SELECT kind, row FROM sources').fetchall():
-            row = json.loads(r)
-            if (row.get('medusa_watched') or '').strip().upper() == 'Y':
-                c.execute('INSERT OR IGNORE INTO profile_titles (profile_id, title_id, watched, updated_at) VALUES (?,?,1,?)',
-                          ('p1', stable_id(k, row['tmdb_id']), now()))
+            want[stable_id(kind, tid)] = (kind, int(tid), (r.get('imdb_id') or '').strip() or None,
+                                         (r.get('title') or '').strip(), num((r.get('year') or '')[:4], int))
+    have = {i for (i,) in c.execute('SELECT id FROM titles')}
+    gone = have - set(want)
+    c.executemany('DELETE FROM titles WHERE id=?', [(i,) for i in gone])
+    stamp = now()
+    for i, (kind, tid, imdb, title, year) in want.items():
+        c.execute('INSERT INTO titles VALUES (?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET imdb_id=excluded.imdb_id,'
+                  ' title=excluded.title, year=excluded.year', (i, kind, tid, imdb, title, year, stamp))
+    c.execute("INSERT OR IGNORE INTO profiles VALUES ('p1', 'Me', 0, NULL, ?)", (stamp,))
     for s in SERVICES:
         c.execute('INSERT OR IGNORE INTO services VALUES (?,?,?,?,?,?)', s)
     for p in PLATFORMS:
         c.execute('INSERT OR IGNORE INTO platforms VALUES (?,?,?,?)', p)
     c.commit()
-    total = c.execute('SELECT COUNT(*) FROM sources').fetchone()[0]
-    print('%d new titles; the master now has %d (%s)' % (added, total, MASTER))
+    print('%d new titles, %d removed; the master now has %d (%s)' % (len(set(want) - have), len(gone), len(want), MASTER))
 
 
 def titles():
-    """(kind, row) for every title in the master."""
-    c = master()
-    return [(k, json.loads(r)) for k, r in c.execute('SELECT kind, row FROM sources ORDER BY id')]
+    """(kind, tmdb_id) for every title in the master."""
+    return [(k, str(t)) for k, t in master().execute('SELECT kind, tmdb_id FROM titles ORDER BY id')]
 
 
 def stable_id(kind, tmdb_id):
@@ -159,7 +178,7 @@ def fetch():
     tok = token()
     auth = {'Authorization': 'Bearer ' + tok} if tok.startswith('eyJ') else {}
     key = '' if auth else '&api_key=' + tok
-    todo = [(k, r['tmdb_id'].strip()) for k, r in titles() if not os.path.exists(cache_path(k, r['tmdb_id'].strip()))]
+    todo = [(k, t) for k, t in titles() if not os.path.exists(cache_path(k, t))]
     todo = list(dict.fromkeys(todo))
     print('%d to fetch (%d already cached)' % (len(todo), len(titles()) - len(todo)))
     lock = threading.Lock()
@@ -205,120 +224,163 @@ def num(v, f=float):
         return None
 
 
-def split(v):
-    return [x.strip() for x in (v or '').split('|') if x.strip()]
-
-
-def services_of(streaming_on):
-    """(codes, free_codes, names): services you can stream on, from the CSV's streaming_on."""
+# Shown in names but not counted as a service you can stream on: paid channels inside another service.
+def services_of(provider_names):
+    """(codes, names): services you can stream on in India, from TMDB's provider names (JustWatch data)."""
     codes, names = [], []
-    for raw in split(streaming_on):
-        if '(paid add-on)' in raw:
+    for name in provider_names:
+        if name in names:
             continue
-        name = raw.replace('(free with ads)', '').strip()
-        names.append(raw)
+        names.append(name)
+        if 'Channel' in name:
+            continue
         c = SERVICE_NAMES.get(name)
         if c and c not in codes:
             codes.append(c)
     return codes, names
 
 
-def trailer(tm, csv_key):
-    if csv_key:
-        return csv_key
+def trailer(tm, mac_key):
+    if mac_key:
+        return mac_key
     vids = [v for v in ((tm.get('videos') or {}).get('results') or []) if v.get('site') == 'YouTube']
     vids.sort(key=lambda v: (v.get('type') != 'Trailer', not v.get('official'), v.get('published_at') or ''))
     return vids[0]['key'] if vids else None
 
 
-def episode(e):
-    return {'season': e.get('season_number'), 'number': e.get('episode_number'), 'airdate': e.get('air_date')} if e else None
+def mac_titles():
+    """What the Mac app's database knows, by (kind, tmdb_id): scores, trailer, direct watch links, franchise."""
+    if not os.path.exists(MAC_DB):
+        print('note: %s not found, building without it' % MAC_DB)
+        return {}
+    d = sqlite3.connect('file:%s?mode=ro' % MAC_DB, uri=True)
+    d.row_factory = sqlite3.Row
+    fr = {}
+    for tid, name in d.execute("SELECT tt.title_id, t.name FROM title_tags tt JOIN tags t ON t.id = tt.tag_id WHERE t.kind = 'franchise'"):
+        fr.setdefault(tid, name)
+    out = {}
+    for r in d.execute('SELECT * FROM titles WHERE tmdb_id IS NOT NULL'):
+        out[(r['type'] or r['tmdb_type'] or '', str(r['tmdb_id']))] = dict(r, franchise=fr.get(r['id']))
+    return out
+
+
+def imdb_ratings(ids):
+    """IMDb rating and votes from IMDb's public ratings file, for the given ids (streamed, nothing is saved)."""
+    import gzip
+    out = {}
+    try:
+        with urllib.request.urlopen(IMDB_RATINGS, timeout=120) as resp, gzip.open(resp, 'rt', encoding='utf-8') as f:
+            next(f)
+            for line in f:
+                tconst, rating, votes = line.rstrip('\n').split('\t')
+                if tconst in ids:
+                    out[tconst] = (float(rating), int(votes))
+    except Exception as e:
+        print('note: IMDb ratings not loaded (%s)' % e)
+    return out
+
+
+def joined(xs):
+    return ' | '.join(x for x in xs if x) or None
 
 
 def build():
-    rows = []
-    for kind, r in titles():
-        tid = r['tmdb_id'].strip()
+    c = master()
+    rows = c.execute('SELECT id, kind, tmdb_id, imdb_id FROM titles ORDER BY id').fetchall()
+    mac = mac_titles()
+    imdb = imdb_ratings({i for _, _, _, i in rows if i})
+    stamp = now()
+    c.execute('DELETE FROM title_data')
+    c.execute('DELETE FROM seasons')
+    c.execute('DELETE FROM watch_offers')
+    for tid_, kind, tmdb_id, imdb_id in rows:
         try:
-            tm = json.load(open(cache_path(kind, tid)))
+            tm = json.load(open(cache_path(kind, tmdb_id)))
         except (OSError, ValueError):
             tm = {}
         if tm.get('missing'):
             tm = {}
-        codes, names = services_of(r.get('streaming_on'))
-        status = (r.get('india_status') or '').strip()
-        rent = split(r.get('rent_buy'))
-        watch = json.loads(r['provider_links']) if (r.get('provider_links') or '').startswith('[') else []
+        m = mac.get((kind, str(tmdb_id))) or {}
         prov = ((tm.get('watch/providers') or {}).get('results') or {}).get('IN') or {}
+        stream = [p['provider_name'] for t in ('flatrate', 'ads', 'free') for p in prov.get(t) or []]
+        rent = list(dict.fromkeys(p['provider_name'] for t in ('rent', 'buy') for p in prov.get(t) or []))
+        codes, names = services_of(stream)
+        try:
+            offers = json.loads(m.get('watch') or '[]') or []
+        except ValueError:
+            offers = []
+        status = 'streaming' if stream else 'rent' if rent else 'not_yet' if tm else 'unknown'
         genres = [g['name'] for g in tm.get('genres') or []]
-        # Horror when TMDB says so, or when at least 3 of the 5 horror lists include it (1 list let in thrillers like
-        # The Girl with the Dragon Tattoo).
-        horror = 'Horror' in genres or (num(r.get('horror_sources'), int) or 0) >= 3
-        seasons = [s.get('episode_count') or 0 for s in sorted(tm.get('seasons') or [], key=lambda s: s.get('season_number') or 0)
-                   if (s.get('season_number') or 0) > 0]
-        networks = [n['name'] for n in tm.get('networks') or []]
         coll = (tm.get('belongs_to_collection') or {}).get('name')
-        franchise = (r.get('franchise') or '').strip() or (coll.replace(' Collection', '') if coll else None)
-        poster = r.get('poster_path') or tm.get('poster_path')
-        backdrop = r.get('backdrop_path') or tm.get('backdrop_path')
-        year = num((r.get('year') or '')[:4], int) or num((tm.get('release_date') or tm.get('first_air_date') or '')[:4], int)
-        runtime = num(r.get('runtime_min'), int) or tm.get('runtime') or ((tm.get('episode_run_time') or [None])[0])
-        rows.append({
-            'id': stable_id(kind, tid),
-            'kind': kind,
-            'title': r.get('title') or r.get('﻿title') or tm.get('title') or tm.get('name'),
-            'year': year,
-            'original_title': r.get('original_title') or None,
-            'tmdb_id': int(tid),
-            'imdb_id': r.get('imdb_id') or None,
-            'runtime': runtime,
-            'countries': [c.strip() for c in (r.get('countries') or '').split(',') if c.strip()],
-            'language': r.get('original_language') or None,
-            'imdb_rating': num(r.get('imdb_rating')),
-            'imdb_votes': num(r.get('imdb_votes'), int),
-            'tmdb_rating': num(r.get('tmdb_rating')),
-            'tmdb_votes': num(r.get('tmdb_votes'), int),
-            'rt_score': num(r.get('rotten_tomatoes'), int),
-            'horror': bool(horror),
-            'genres': genres,
-            'franchise': franchise,
-            'overview': tm.get('overview') or None,
-            'tagline': tm.get('tagline') or None,
-            'poster': IMG + 'w342' + poster if poster else None,
-            'backdrop': IMG + 'w1280' + backdrop if backdrop else None,
-            'trailer_key': trailer(tm, r.get('trailer_key')),
-            'india_status': {'Streaming in India': 'streaming', 'Rent or buy only in India': 'rent',
-                             'Not available in India': 'not_yet'}.get(status, 'unknown'),
-            'services': codes,
-            'service_names': names,
-            'rent_buy': rent,
-            'watch': watch,
-            'watch_page': r.get('watch_page') or prov.get('link'),
-            'seasons': seasons,
-            'networks': networks,
-            'platform': next((NETWORK_PLATFORM[n] for n in networks if n in NETWORK_PLATFORM), None) if kind == 'show' else None,
-            'tmdb_status': tm.get('status'),
-            'next_ep': episode(tm.get('next_episode_to_air')),
-            'prev_ep': episode(tm.get('last_episode_to_air')),
-        })
-    c = master()
-    stamp = now()
-    c.execute('DELETE FROM catalogue')
-    c.executemany('INSERT INTO catalogue VALUES (?,?,?)', [(t['id'], json.dumps(t, ensure_ascii=False), stamp) for t in rows])
+        franchise = m.get('franchise') or (coll.replace(' Collection', '') if coll else None)
+        poster, backdrop = tm.get('poster_path'), tm.get('backdrop_path')
+        networks = [n['name'] for n in tm.get('networks') or []]
+        ir = imdb.get(imdb_id) if imdb_id else None
+        nxt, prv = tm.get('next_episode_to_air') or {}, tm.get('last_episode_to_air') or {}
+        c.execute('INSERT INTO title_data VALUES (%s)' % ','.join('?' * 33), (
+            tid_,
+            tm.get('original_title') or tm.get('original_name'),
+            tm.get('runtime') or ((tm.get('episode_run_time') or [None])[0]),
+            joined(x.get('iso_3166_1') for x in tm.get('production_countries') or []) or joined(tm.get('origin_country') or []),
+            tm.get('original_language'),
+            m.get('imdb_rating') or (ir[0] if ir else None), m.get('imdb_votes') or (ir[1] if ir else None),
+            tm.get('vote_average') or None, tm.get('vote_count') or None,
+            m.get('rt_score'),
+            1 if 'Horror' in genres else 0,
+            joined(genres), franchise, tm.get('overview') or None, tm.get('tagline') or None,
+            IMG + 'w342' + poster if poster else None, IMG + 'w1280' + backdrop if backdrop else None,
+            trailer(tm, m.get('trailer_key')),
+            status, joined(codes), joined(names), joined(rent), prov.get('link'),
+            joined(networks),
+            next((NETWORK_PLATFORM[n] for n in networks if n in NETWORK_PLATFORM), None) if kind == 'show' else None,
+            tm.get('status'),
+            nxt.get('season_number'), nxt.get('episode_number'), nxt.get('air_date'),
+            prv.get('season_number'), prv.get('episode_number'), prv.get('air_date'),
+            stamp))
+        for s in tm.get('seasons') or []:
+            if (s.get('season_number') or 0) > 0:
+                c.execute('INSERT OR REPLACE INTO seasons VALUES (?,?,?)', (tid_, s['season_number'], s.get('episode_count') or 0))
+        for o in offers:
+            c.execute('INSERT INTO watch_offers VALUES (?,?,?,?,?,?)',
+                      (tid_, o.get('code'), o.get('pkg'), o.get('name'), o.get('type'), o.get('url')))
     c.execute("INSERT OR REPLACE INTO meta VALUES ('built_at', ?)", (stamp,))
     c.commit()
-    print('%d titles built into %s' % (len(rows), MASTER))
+    print('%d titles built into %s (%d matched in the Mac app, %d IMDb scores from IMDb)' % (
+        len(rows), MASTER, sum(1 for r in rows if (r[1], str(r[2])) in mac), len(imdb)))
 
 
 def catalogue():
-    """What publish pushes: the built catalogue plus services and platforms, from the master."""
+    """What publish pushes, assembled from the master's tables in the shape of Supabase's titles table."""
     c = master()
     c.row_factory = sqlite3.Row
+    seasons, offers = {}, {}
+    for r in c.execute('SELECT * FROM seasons ORDER BY title_id, season'):
+        seasons.setdefault(r['title_id'], []).append(r['episodes'])
+    for r in c.execute('SELECT * FROM watch_offers'):
+        offers.setdefault(r['title_id'], []).append({k: r[k] for k in ('code', 'pkg', 'name', 'type', 'url')})
+    lst = lambda v: [x for x in (v or '').split(' | ') if x]
+    ep = lambda s, n, a: {'season': s, 'number': n, 'airdate': a} if s is not None else None
+    out = []
+    for r in c.execute('SELECT * FROM titles JOIN title_data USING (id) ORDER BY id'):
+        out.append({
+            'id': r['id'], 'kind': r['kind'], 'title': r['title'], 'year': r['year'], 'original_title': r['original_title'],
+            'tmdb_id': r['tmdb_id'], 'imdb_id': r['imdb_id'], 'runtime': r['runtime'], 'countries': lst(r['countries']),
+            'language': r['language'], 'imdb_rating': r['imdb_rating'], 'imdb_votes': r['imdb_votes'],
+            'tmdb_rating': r['tmdb_rating'], 'tmdb_votes': r['tmdb_votes'], 'rt_score': r['rt_score'],
+            'horror': bool(r['horror']), 'genres': lst(r['genres']), 'franchise': r['franchise'],
+            'overview': r['overview'], 'tagline': r['tagline'], 'poster': r['poster'], 'backdrop': r['backdrop'],
+            'trailer_key': r['trailer_key'], 'india_status': r['india_status'], 'services': lst(r['services']),
+            'service_names': lst(r['service_names']), 'rent_buy': lst(r['rent_buy']), 'watch': offers.get(r['id'], []),
+            'watch_page': r['watch_page'], 'seasons': seasons.get(r['id'], []), 'networks': lst(r['networks']),
+            'platform': r['platform'], 'tmdb_status': r['tmdb_status'],
+            'next_ep': ep(r['next_season'], r['next_episode'], r['next_airdate']),
+            'prev_ep': ep(r['prev_season'], r['prev_episode'], r['prev_airdate']),
+        })
     return {
         'built_at': c.execute("SELECT value FROM meta WHERE key='built_at'").fetchone()[0],
         'services': [dict(r, mine=bool(r['mine']), free=bool(r['free'])) for r in c.execute('SELECT * FROM services ORDER BY sort')],
         'platforms': [dict(r) for r in c.execute('SELECT * FROM platforms ORDER BY sort')],
-        'titles': [json.loads(r['data']) for r in c.execute('SELECT data FROM catalogue ORDER BY id')],
+        'titles': out,
     }
 
 
@@ -431,5 +493,5 @@ def sync():
 if __name__ == '__main__':
     cmd = sys.argv[1] if len(sys.argv) > 1 else 'build'
     def upkeep():
-        fetch(); build(); publish(); sync()
+        seed(); fetch(); build(); publish(); sync()
     {'seed': seed, 'fetch': fetch, 'build': build, 'publish': publish, 'sync': sync, 'upkeep': upkeep}[cmd]()
