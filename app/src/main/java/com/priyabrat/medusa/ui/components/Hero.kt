@@ -30,6 +30,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
@@ -293,10 +294,23 @@ fun HeroCarousel(
                 ) { pick ->
                     Column(verticalArrangement = Arrangement.spacedBy(Dimens.Gap8)) {
                         if (pick.eyebrow.isNotEmpty()) Text(pick.eyebrow.uppercase(), style = MedusaType.Eyebrow, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        // One line at one size; a title that does not fit ends with an ellipsis, so every slide lines up.
-                        Text(pick.title, style = MedusaType.HeroTitle, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        // One line at one size, so every slide lines up. Prince, 2026-11-27: up to 22 characters (spaces
+                        // count) show in full, so the title may run wider than the text column, up to the poster; longer
+                        // titles stop at 22 and end with an ellipsis.
+                        Text(
+                            if (pick.title.length > TITLE_MAX_CHARS) pick.title.take(TITLE_MAX_CHARS).trimEnd() + "…" else pick.title,
+                            style = MedusaType.HeroTitle, maxLines = 1, overflow = TextOverflow.Ellipsis, softWrap = false,
+                            modifier = Modifier.wrapContentWidth(Alignment.Start, unbounded = true).widthIn(max = TITLE_MAX_W),
+                        )
                         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Dimens.Gap10)) {
-                            Text(listOf(pick.year, pick.runtime).filter { it.isNotBlank() }.joinToString(" · "), style = MedusaType.MonoStrong)
+                            // Year · runtime with a tight dot: the dot is drawn in the proportional font (the mono font's
+                            // dot and spaces are a full character wide each).
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Dimens.Gap4)) {
+                                listOf(pick.year, pick.runtime).filter { it.isNotBlank() }.forEachIndexed { n, part ->
+                                    if (n > 0) Text("·", style = MedusaType.MonoStrong.copy(fontFamily = androidx.compose.ui.text.font.FontFamily.Default))
+                                    Text(part, style = MedusaType.MonoStrong)
+                                }
+                            }
                             pick.ratings.forEach { RatingBadge(it) }
                         }
                         // Always two lines tall (minLines), so the title sits at the same height on every slide.
@@ -393,6 +407,9 @@ private fun slideFade() = androidx.compose.animation.ContentTransform(
     initialContentExit = androidx.compose.animation.fadeOut(tween(300)),
     sizeTransform = androidx.compose.animation.SizeTransform(clip = false),
 )
+
+private const val TITLE_MAX_CHARS = 22
+private val TITLE_MAX_W = 700.dp   // from the left margin to just short of the poster on a 960 dp wide screen
 
 private const val TRAILER_PLAYING = 0
 private const val TRAILER_ENDED = 1
