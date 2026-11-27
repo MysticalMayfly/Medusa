@@ -8,6 +8,7 @@ If that build is then not published, remove its row.
 
 | Build | Version | Date | APK | Changes |
 |---|---|---|---|---|
+| b21 | 1.3 | 2026-11-27 | `medusa-1.3-b21.apk` | New top bar: left and right move one tab per press and open it, with an instant white pill and no lost presses; Up from a page lands on the open tab (or the avatar, search or gear on those pages). A light placeholder shows at once and the page fades in when you stop. The carousel plays trailers only while you are in it, then grows to full height and dims the top bar; otherwise it turns through the pictures. Its round buttons sit under Watch now; the arrows and dots are gone, and left and right on Watch now change the title. Year and runtime without the dot. The first shelf starts lower, peeking at the bottom. |
 | b20 | 1.3 | 2026-11-27 | `medusa-1.3-b20.apk` | Add account uses phone sign-in with a QR code. Continue as guest keeps viewing on this TV. Profile labels are simplified and the retired Preetam profile is removed. |
 | b19 | 1.3 | 2026-11-27 | `medusa-1.3-b19.apk` | New loading screen lines: "Waking the serpents" first, then 52 new curse and horror lines in random order. |
 | b18 | 1.3 | 2026-11-27 | `medusa-1.3-b18.apk` | Add profiles with Google sign-in and sign out from a profile on this TV. Existing linked profile history is retained. |

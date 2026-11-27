@@ -30,7 +30,7 @@ android {
         minSdk = 34
         targetSdk = 37
         // versionCode +1 on EVERY release (never reuse/lower). versionName only for a major update.
-        versionCode = 20
+        versionCode = 21
         versionName = "1.3"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
