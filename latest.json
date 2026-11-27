@@ -1,7 +1,7 @@
 {
-  "versionCode": 24,
+  "versionCode": 25,
   "versionName": "1.3",
-  "apkUrl": "https://raw.githubusercontent.com/MysticalMayfly/medusa/updates/medusa-1.3-b24.apk",
-  "sha256": "2e30dc86b636252fe46616f57c4103a32711387340519821b968da2df780019e",
-  "notes": "Carousel titles of up to 22 characters show in full on one line at the same size; longer ones stop at 22 and end with an ellipsis. The dot between the year and the runtime sits closer."
+  "apkUrl": "https://raw.githubusercontent.com/MysticalMayfly/medusa/updates/medusa-1.3-b25.apk",
+  "sha256": "049fae3a46c275a8b9aa53b3fe11c17349610702c49ab447905e1557f141c2aa",
+  "notes": "The app only says where a title streams. Home has a Streaming on row for each service (Netflix, JioHotstar and so on). Horror rows read Streaming on, and the summary counts titles streaming in India. Watch now labels say Streaming, Free, Rent or Buy, and every service tag looks the same."
 }
