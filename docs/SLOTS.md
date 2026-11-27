@@ -44,7 +44,7 @@ Horror year walls are the horror films of each of the last six years, best revie
 | `card[].progress` | Bar along the poster's bottom | 0.4 | 0..1? | | `TitleCard.progress` | |
 | `card[].dot` | Coloured dot before the subtitle | Netflix red | ARGB? | | `TitleCard.dotArgb` | |
 | `shelf[].id` | Shelf id | best | id | | `Shelf.id` | |
-| `shelf[].title` | Shelf heading | Best reviewed on your plans | text | | `Shelf.title` | |
+| `shelf[].title` | Shelf heading | Streaming on Netflix | text | | `Shelf.title` | |
 | `shelf[].count` | Small count after the heading | 8 | int? | | `Shelf.count` | |
 | `shelf[].see_all` | See all link text | See all 178 | text? | | `Shelf.seeAllLabel` | |
 | `shelf[].dot` | Dot before the heading | | ARGB? | | `Shelf.dotArgb` | |
@@ -64,7 +64,7 @@ Horror year walls are the horror films of each of the last six years, best revie
 | `hero.ratings[]` | IMDb, Tomatometer | 5.5, 44% | rating[] | `detail.ratings[]` | `HeroPick.ratings` | |
 | `hero.overview` | Synopsis, 3 lines | | text | `detail.overview` | `HeroPick.overview` | |
 | `hero.watch_label` | Watch button text | Watch on Prime Video | text | first of `hero.watch_options[]` | `HeroPick.watchLabel` | |
-| `hero.watch_options[]` | Chooser: service, monogram, kind | Netflix · Your plan | list | `detail.streaming[]`, `detail.rent[]` | `HeroPick.watchOptions` (`WatchOption.*`) | |
+| `hero.watch_options[]` | Chooser: service, monogram, kind | Netflix · Streaming | list | `detail.streaming[]`, `detail.rent[]` | `HeroPick.watchOptions` (`WatchOption.*`) | |
 | `hero.interested` | Heart on | true | bool | `card.interested` | `HeroPick.interested` | |
 | `hero.seen` | Tick on | false | bool | `card.watched` | `HeroPick.seen` | |
 | `hero.trailer_id` | YouTube id played behind the pick (milestone 6) | | text? | | `HeroPick.trailerId` | |
@@ -114,7 +114,7 @@ Horror year walls are the horror films of each of the last six years, best revie
 | `horror.wall.summary` | Seen and ready counts | 17 of 142 seen · 106 ready | text | | `HorrorWall.summary` | |
 | `horror.wall.seen[]` | Not seen / Seen / Everything | | filter[] | | `HorrorWall.seenSegments` | |
 | `horror.wall.sort` | Sort | Best reviewed | select | | `HorrorWall.sort` | |
-| `horror.wall.where[]` | Anywhere, plans, free, services, rent only | | filter[] | | `HorrorWall.whereChips` | |
+| `horror.wall.where[]` | Anywhere, free, services, rent only | | filter[] | | `HorrorWall.whereChips` | |
 | `horror.wall.items[]` | The wall | | card[] | | `HorrorWall.items` | |
 
 ## Universes
@@ -149,7 +149,7 @@ Horror year walls are the horror films of each of the last six years, best revie
 | `detail.overview` | Synopsis | | text | `hero.overview` | `TitleDetail.overview` | |
 | `detail.ratings[]` | IMDb, Tomatometer | | rating[] | `hero.ratings[]` | `TitleDetail.ratings` | |
 | `detail.facts[]` | Label and value rows | Genres · Horror, Mystery | list | | `TitleDetail.facts` | |
-| `detail.streaming[]` | Where it streams in India, yours filled | JioHotstar · your plan | list | `hero.watch_options[]` | `TitleDetail.streaming` | |
+| `detail.streaming[]` | Where it streams in India, filled in the service's colour | JioHotstar | list | `hero.watch_options[]` | `TitleDetail.streaming` | |
 | `detail.rent[]` | Rent and buy prices | Prime Video · Rent ₹79 | list | `hero.watch_options[]` | `TitleDetail.rentPrices` | |
 | `detail.links[]` | Link names | IMDb | list | | `TitleDetail.links` | |
 | `detail.watched` / `.interested` / `.has_trailer` | Button states | | bool | `card.*`, `hero.*` | `TitleDetail.watched`, `.interested`, `.hasTrailer` | |

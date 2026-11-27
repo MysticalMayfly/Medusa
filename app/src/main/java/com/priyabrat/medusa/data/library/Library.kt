@@ -11,7 +11,7 @@ import org.json.JSONObject
 
 class Platform(val slug: String, val name: String, val colour: String?, val sort: Int)
 
-class Service(val code: String, val name: String, val colour: String?, val mine: Boolean, val free: Boolean, val sort: Int)
+class Service(val code: String, val name: String, val colour: String?, val free: Boolean, val sort: Int)
 
 class Tag(val kind: String, val name: String, val colour: String?, val count: Int)
 
@@ -105,7 +105,7 @@ class Library(
                 exportedAt = o.optString("exported_at"),
                 platforms = o.optJSONArray("platforms").objects { Platform(it.getString("slug"), it.getString("name"), it.str("colour"), it.optInt("sort")) },
                 services = o.optJSONArray("services").objects {
-                    Service(it.getString("code"), it.getString("name"), it.str("colour"), it.optInt("mine") == 1, it.optInt("free") == 1, it.optInt("sort"))
+                    Service(it.getString("code"), it.getString("name"), it.str("colour"), it.optInt("free") == 1, it.optInt("sort"))
                 },
                 tags = o.optJSONArray("tags").objects { Tag(it.getString("kind"), it.getString("name"), it.str("colour"), it.optInt("n")) },
                 lists = o.optJSONArray("lists").objects { YearList(it.getInt("id"), it.getString("name"), it.optString("kind"), it.int("year"), it.str("genre")) },
@@ -139,7 +139,7 @@ class Library(
                 exportedAt = o.optString("fetched_at"),
                 platforms = o.optJSONArray("platforms").objects { Platform(it.getString("slug"), it.getString("name"), it.str("colour"), it.optInt("sort")) }.sortedBy { it.sort },
                 services = o.optJSONArray("services").objects {
-                    Service(it.getString("code"), it.getString("name"), it.str("colour"), it.optBoolean("mine"), it.optBoolean("free"), it.optInt("sort"))
+                    Service(it.getString("code"), it.getString("name"), it.str("colour"), it.optBoolean("free"), it.optInt("sort"))
                 }.sortedBy { it.sort },
                 tags = tags,
                 lists = lists,

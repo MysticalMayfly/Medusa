@@ -3,7 +3,7 @@
 -- Read by the TV app through the app_titles view with the publishable key: read-only, catalogue facts only.
 
 create table if not exists public.services (
-  code text primary key, name text not null, colour text, mine boolean not null default false,
+  code text primary key, name text not null, colour text,
   free boolean not null default false, sort int not null default 0
 );
 

@@ -69,7 +69,7 @@ def master():
         ' season INTEGER NOT NULL, episodes INTEGER NOT NULL, PRIMARY KEY (title_id, season));'
         'CREATE TABLE IF NOT EXISTS watch_offers (title_id INTEGER NOT NULL REFERENCES titles(id) ON DELETE CASCADE,'
         ' code TEXT, pkg TEXT, name TEXT, type TEXT, url TEXT);'
-        'CREATE TABLE IF NOT EXISTS services (code TEXT PRIMARY KEY, name TEXT, colour TEXT, mine INTEGER, free INTEGER, sort INTEGER);'
+        'CREATE TABLE IF NOT EXISTS services (code TEXT PRIMARY KEY, name TEXT, colour TEXT, free INTEGER, sort INTEGER);'
         'CREATE TABLE IF NOT EXISTS platforms (slug TEXT PRIMARY KEY, name TEXT, colour TEXT, sort INTEGER);'
         'CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT);'
         'CREATE TABLE IF NOT EXISTS profiles (id TEXT PRIMARY KEY, name TEXT NOT NULL, avatar INTEGER NOT NULL DEFAULT 0,'
@@ -83,18 +83,18 @@ def master():
 
 IMG = 'https://image.tmdb.org/t/p/'
 
-# Indian services the app knows (the Mac app's services table, plus Plex). mine = on Prince's plans.
+# Indian services the app knows (the Mac app's services table, plus Plex). free = free with ads.
 SERVICES = [
-    # code, name, colour, mine, free, sort
-    ('NF', 'Netflix', '#ff5a4e', True, False, 0),
-    ('JH', 'JioHotstar', '#ff5fae', True, False, 1),
-    ('PV', 'Prime Video', '#3fd0d4', True, False, 2),
-    ('SL', 'SonyLIV', '#ffd23f', True, False, 3),
-    ('AP', 'Apple TV', '#ecebf2', True, False, 4),
-    ('Z5', 'ZEE5', '#b0a2ff', True, False, 5),
-    ('LP', 'Lionsgate Play', '#b6e34a', True, False, 6),
-    ('MU', 'MUBI', '#8fe0c4', False, False, 7),
-    ('PX', 'Plex', '#e5a00d', False, True, 8),
+    # code, name, colour, free, sort
+    ('NF', 'Netflix', '#ff5a4e', False, 0),
+    ('JH', 'JioHotstar', '#ff5fae', False, 1),
+    ('PV', 'Prime Video', '#3fd0d4', False, 2),
+    ('SL', 'SonyLIV', '#ffd23f', False, 3),
+    ('AP', 'Apple TV', '#ecebf2', False, 4),
+    ('Z5', 'ZEE5', '#b0a2ff', False, 5),
+    ('LP', 'Lionsgate Play', '#b6e34a', False, 6),
+    ('MU', 'MUBI', '#8fe0c4', False, 7),
+    ('PX', 'Plex', '#e5a00d', True, 8),
 ]
 # streaming_on names in the CSVs -> service code. "(paid add-on)" channels are left out, as on the Mac.
 SERVICE_NAMES = {
@@ -153,7 +153,7 @@ def seed():
                   ' rt_score=excluded.rt_score, horror=excluded.horror', (i, kind, tid, imdb, title, year, rt, horror, stamp))
     c.execute("INSERT OR IGNORE INTO profiles VALUES ('p1', 'Me', 0, NULL, ?)", (stamp,))
     for s in SERVICES:
-        c.execute('INSERT OR IGNORE INTO services VALUES (?,?,?,?,?,?)', s)
+        c.execute('INSERT OR IGNORE INTO services (code, name, colour, free, sort) VALUES (?,?,?,?,?)', s)
     for p in PLATFORMS:
         c.execute('INSERT OR IGNORE INTO platforms VALUES (?,?,?,?)', p)
     c.commit()
@@ -386,7 +386,7 @@ def catalogue():
         })
     return {
         'built_at': c.execute("SELECT value FROM meta WHERE key='built_at'").fetchone()[0],
-        'services': [dict(r, mine=bool(r['mine']), free=bool(r['free'])) for r in c.execute('SELECT * FROM services ORDER BY sort')],
+        'services': [dict(r, free=bool(r['free'])) for r in c.execute('SELECT code, name, colour, free, sort FROM services ORDER BY sort')],
         'platforms': [dict(r) for r in c.execute('SELECT * FROM platforms ORDER BY sort')],
         'titles': out,
     }

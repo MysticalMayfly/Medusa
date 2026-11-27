@@ -88,7 +88,7 @@ class FakeMedusaRepository : MedusaRepository {
         (from until from + count).map { card(it, c, sub, dot) }
 
     private val watchOptions = listOf(
-        WatchOption("w1", "Platform A", "PA", "Your plan"),
+        WatchOption("w1", "Platform A", "PA", "Streaming"),
         WatchOption("w2", "Platform B", "PB", "Rent ₹00"),
         WatchOption("w3", "Platform C", "PC", "Buy ₹000"),
     )
@@ -128,7 +128,7 @@ class FakeMedusaRepository : MedusaRepository {
             val shelves = listOf(
                 Shelf("interested", "You’re interested in", items = cards(1, 12, c)),
                 Shelf("airing", "Airing now and coming up", items = cards(13, 5, c, "S0 airing · in 0d")),
-                Shelf("best", "Best reviewed on your plans", items = cards(20, 14, c)),
+                Shelf("best", "Streaming on Platform A", items = cards(20, 14, c)),
                 Shelf("newhorror", "New horror you can watch now", seeAllLabel = "See all", items = cards(40, 12, c)),
                 Shelf("start", "Shows to start", items = cards(60, 12, c)),
                 Shelf("added", "Just added to your collection", items = cards(80, 12, c)),
@@ -211,12 +211,11 @@ class FakeMedusaRepository : MedusaRepository {
             ),
             wall = if (tab == "browse") null else HorrorWall(
                 title = tabs.first { it.selected }.label.let { if (tab == "all") it else "$it horror" },
-                summary = "0 of 000 seen · 000 ready to watch on your plans or free",
+                summary = "0 of 000 seen · 000 streaming in India",
                 seenSegments = options(listOf("notseen" to "Not seen", "seen" to "Seen", "all" to "Everything"), c.sel(HORROR, GROUP_SEGMENT, "notseen")),
                 sort = select(HORROR, GROUP_SORT, listOf("Best reviewed", "Your list order", "Newest first", "Title A–Z"), c),
                 whereChips = listOf(
                     FilterOption("anywhere", "Anywhere"),
-                    FilterOption("plans", "On my plans"),
                     FilterOption("free", "Free with ads"),
                 ).plus(services.map { FilterOption(it.id, it.name, dotArgb = it.argb) })
                     .plus(FilterOption("rent", "Rent only"))
@@ -258,7 +257,7 @@ class FakeMedusaRepository : MedusaRepository {
                 meta = "Year · 0h 00m · 00%",
                 seen = n <= 2 || "$id-e$n" in c.watched,
                 upNext = n == 3,
-                services = if (n == 1) listOf(ServiceTag("Platform A", mine = true, argb = platforms[0].argb)) else emptyList(),
+                services = if (n == 1) listOf(ServiceTag("Platform A", argb = platforms[0].argb)) else emptyList(),
             )
         }
         UniverseUiState(
@@ -290,7 +289,7 @@ class FakeMedusaRepository : MedusaRepository {
                 Fact("Tomatometer", "00%"),
                 Fact("Status", "Status"),
             ),
-            streaming = listOf(ServiceTag("Platform A · your plan", mine = true, argb = platforms[0].argb), ServiceTag("Platform B", mine = false, argb = platforms[1].argb)),
+            streaming = listOf(ServiceTag("Platform A", argb = platforms[0].argb), ServiceTag("Platform B", argb = platforms[1].argb)),
             rentPrices = listOf(Fact("Platform C", "Rent ₹00"), Fact("Platform D", "Buy ₹000")),
             links = listOf(Link("IMDb", "https://www.imdb.com/"), Link("Where to watch (IN)", "https://www.justwatch.com/in")),
             watched = id in c.watched,

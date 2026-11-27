@@ -179,18 +179,18 @@ private fun Tick(on: Boolean, onClick: () -> Unit) {
     }
 }
 
-/** .svc / .uv-svc: a streaming service tag; filled when it is on one of your plans. */
+/** .svc / .uv-svc: a streaming service tag, filled in the service's colour. */
 @Composable
 fun ServiceChip(tag: ServiceTag) {
     val c = Color(tag.argb)
     Text(
         tag.name,
         style = MedusaType.Small,
-        color = if (tag.mine) Color(0xFF111111) else MedusaColors.Fg,
+        color = Color(0xFF111111),
         maxLines = 1,
         modifier = Modifier
             .clip(Shapes.Pill)
-            .background(if (tag.mine) c else Color.Transparent)
+            .background(c)
             .border(1.dp, c, Shapes.Pill)
             .padding(horizontal = 7.dp, vertical = 2.dp),
     )

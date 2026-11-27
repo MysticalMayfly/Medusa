@@ -156,9 +156,8 @@ class LibraryRepository(private val store: LibraryStore) : MedusaRepository {
     private fun Snap.released(t: T) = t.year == null || t.year <= thisYear
     /** Indian services for a title: Horror.html's checked list first, else TMDB's. */
     private fun codes(t: T): List<String> = if (t.r.indiaStatus == "streaming") t.r.indiaSubs else t.r.ott
-    private fun Snap.mine(t: T) = codes(t).filter { svc(it)?.mine == true }
     private fun Snap.free(t: T) = codes(t).filter { svc(it)?.free == true }
-    private fun Snap.watchable(t: T) = mine(t).isNotEmpty() || free(t).isNotEmpty()
+    private fun Snap.watchable(t: T) = codes(t).isNotEmpty()
     private fun tonightScore(t: T) = (t.r.score ?: 50.0) / 10.0
     private fun sortScore(t: T) = t.r.score ?: -1.0
     private val byScoreDesc = Comparator<T> { a, b -> tonightScore(b).compareTo(tonightScore(a)) }
@@ -268,9 +267,8 @@ class LibraryRepository(private val store: LibraryStore) : MedusaRepository {
 
     private fun Snap.pool(scope: String, type: String?): List<Weighted> {
         val base = candidates().filter { !it.watched && !animated(it) && inScope(scope, it) && (type == null || it.r.type == type) }
-        val onPlan = base.filter { mine(it).isNotEmpty() }
         val ready = base.filter { watchable(it) }
-        val from = if (onPlan.isNotEmpty()) onPlan else if (ready.isNotEmpty()) ready else base
+        val from = if (ready.isNotEmpty()) ready else base
         return from.map {
             Weighted(it, (if (it.interested) 7.0 else 0.0) + tonightScore(it) / 2 + (if (it.horror) 0.5 else 0.0) +
                 (if (it.r.backdrop != null) 1.0 else 0.0) + (if (it.r.trailerKey != null && it.r.trailerOk != 0) 0.5 else 0.0))
@@ -320,16 +318,16 @@ class LibraryRepository(private val store: LibraryStore) : MedusaRepository {
         "LP" to "com.lionsgateplay.videoapp", "MU" to "com.mubi", "PX" to "com.plexapp.android",
     )
 
-    private val kindLabel = listOf("Your plan", "Free", "Subscription", "Rent", "Buy")
+    private val kindLabel = listOf("Streaming", "Free", "Streaming", "Rent", "Buy")
 
     private class Ranked(val o: Offer, val rank: Int)
 
-    /** One choice per service, best first: your plans, then free, then other subscriptions, then rent and buy (watchOffers). */
+    /** One choice per service, best first: known streaming services, then free, then other streaming offers, then rent and buy (watchOffers). */
     private fun Snap.offers(t: T): List<Ranked> {
         fun rank(o: Offer): Int {
             val s = o.code?.let { svc(it) }
             return when {
-                o.type == "flatrate" && s?.mine == true -> 0
+                o.type == "flatrate" && s != null -> 0
                 o.type == "free" || o.type == "ads" -> 1
                 o.type == "flatrate" -> 2
                 o.type == "rent" -> 3
@@ -363,11 +361,11 @@ class LibraryRepository(private val store: LibraryStore) : MedusaRepository {
             WatchOption("o$i", offerLabel(x), x.o.code ?: offerLabel(x).filter { it.isLetterOrDigit() }.take(2).uppercase(), kindLabel[x.rank], x.o.url)
         }
         // No JustWatch link, but the catalogue knows the services it streams on: open those apps instead
-        // (the details panel already said "Prime Video · your plan" while this button said there was no link).
+        // (the details panel already listed Prime Video while this button said there was no link).
         if (options.isEmpty()) {
             options = codes(t).mapNotNull { c -> SERVICE_APPS[c]?.let { pkg ->
                 val s = svc(c)
-                WatchOption("s$c", s?.name ?: c, c, if (s?.mine == true) "Your plan" else if (s?.free == true) "Free" else "Subscription", "app:$pkg")
+                WatchOption("s$c", s?.name ?: c, c, if (s?.free == true) "Free" else "Streaming", "app:$pkg")
             } }
         }
         val label = when {
@@ -408,7 +406,6 @@ class LibraryRepository(private val store: LibraryStore) : MedusaRepository {
         fun cards(list: List<T>) = list.map { shelfCard(it) }
         val fav = c.filter { it.interested }.sortedWith(byScoreDesc)
         val air = titles.filter { it.r.avail }.mapNotNull { t -> airing(t)?.let { t to it } }.sortedBy { it.second.date }
-        val plans = c.filter { mine(it).isNotEmpty() }.sortedWith(byScoreDesc).take(60)
         val newH = c.filter { it.horror && (it.year ?: 0) >= thisYear - 1 && watchable(it) }.sortedWith(byScoreDesc).take(60)
         val shows = c.filter { it.isShow && it.progSeason == null && (watchable(it) || it.r.platform != null) }.sortedWith(byScoreDesc).take(60)
         val added = c.sortedWith(compareByDescending<T> { it.r.createdAt }.thenByDescending { it.id }).take(40)
@@ -423,9 +420,12 @@ class LibraryRepository(private val store: LibraryStore) : MedusaRepository {
         if (air.isNotEmpty()) rows.add(Shelf("air", "Airing now and coming up", items = air.map { (t, a) ->
             shelfCard(t, if (a.days == 0L) "${a.short} · today" else "${a.short} · in ${a.days}d")
         }))
-        claim(plans).let { if (it.size >= 4) rows.add(Shelf("plans", "Best reviewed on your plans", items = cards(mixed(it)))) }
         claim(newH).let { if (it.size >= 4) rows.add(Shelf("newh", "New horror you can watch now", seeAllLabel = "See all", items = cards(mixed(it)))) }
         claim(shows).let { if (it.size >= 4) rows.add(Shelf("shows", "Shows to start", items = cards(mixed(it)))) }
+        // One row per streaming service, best reviewed first; services with the most titles come first.
+        lib.services.map { s -> s to c.filter { s.code in codes(it) }.sortedWith(byScoreDesc).take(60) }
+            .sortedByDescending { it.second.size }
+            .forEach { (s, list) -> claim(list).let { if (it.size >= 4) rows.add(Shelf("svc:${s.code}", "Streaming on ${s.name}", dotArgb = argb(s.colour), items = cards(mixed(it)))) } }
         claim(added).let { if (it.size >= 4) rows.add(Shelf("added", "Just added to your collection", items = cards(mixed(it)))) }
 
         val going = titles.filter { it.isShow && !it.watched && it.progSeason != null && it.r.avail }.sortedByDescending { it.progAt ?: "" }
@@ -550,17 +550,15 @@ class LibraryRepository(private val store: LibraryStore) : MedusaRepository {
     private fun Snap.horrorTitles() = titles.filter { it.horror && !it.r.placeholder && it.r.avail }
     private fun Snap.yearLists() = lib.lists.filter { it.kind == "year" && it.genre == "Horror" }.sortedByDescending { it.year ?: 0 }
     private fun Snap.listTitles(listId: Int) = (lib.listItems[listId] ?: emptyList()).mapNotNull { byId[it] }.filter { it.r.avail }
-    private fun Snap.svcOrCode(c: String) = svc(c) ?: Service(c, c, "#888888", mine = false, free = false, sort = 99)
+    private fun Snap.svcOrCode(c: String) = svc(c) ?: Service(c, c, "#888888", free = false, sort = 99)
     private fun rentOf(t: T) = t.r.indiaRent
 
     private class Where(val text: String, val colour: Long?)
 
     private fun Snap.where(t: T): Where {
-        val m = mine(t); val fr = free(t); val all = codes(t)
+        val all = codes(t)
         return when {
-            m.isNotEmpty() -> Where(svcOrCode(m[0]).name, argb(svcOrCode(m[0]).colour))
-            fr.isNotEmpty() -> Where("${svcOrCode(fr[0]).name}, free", argb(svcOrCode(fr[0]).colour))
-            all.isNotEmpty() -> Where(svcOrCode(all[0]).name, null)
+            all.isNotEmpty() -> svcOrCode(all[0]).let { s -> Where(if (s.free) "${s.name}, free" else s.name, argb(s.colour)) }
             rentOf(t).isNotEmpty() -> Where("Rent only", null)
             else -> Where(if (t.r.indiaStatus == "not_yet") "Not in India yet" else "", null)
         }
@@ -589,13 +587,13 @@ class LibraryRepository(private val store: LibraryStore) : MedusaRepository {
         fun ratingWhere(t: T) = listOf(rating(t), where(t).text).filter { it.isNotEmpty() }.joinToString(" · ")
         val fav = c.filter { it.interested }.sortedWith(byHorrorScore)
         if (fav.isNotEmpty()) out.add(Shelf("fav", "You’re interested in", items = fav.take(30).map { shelfCard(it, ratingWhere(it)) }))
-        // One row per service you can watch on, your plans first, biggest first.
-        lib.services.filter { it.mine || it.free }
+        // One row per streaming service, biggest first.
+        lib.services
             .map { s -> s to c.filter { s.code in codes(it) }.sortedWith(byHorrorScore) }
             .filter { it.second.size >= 3 }
-            .sortedWith(compareByDescending<Pair<Service, List<T>>> { if (it.first.mine) 1 else 0 }.thenByDescending { it.second.size })
+            .sortedByDescending { it.second.size }
             .forEach { (s, list) ->
-                out.add(Shelf("svc:${s.code}", if (s.mine) "On ${s.name}" else "Free on ${s.name}", dotArgb = argb(s.colour),
+                out.add(Shelf("svc:${s.code}", if (s.free) "Free on ${s.name}" else "Streaming on ${s.name}", dotArgb = argb(s.colour),
                     seeAllLabel = if (list.size > 30) "See all ${list.size}" else null, items = list.take(30).map { shelfCard(it, yearRating(it)) }))
             }
         // Next film in each horror franchise, the ones you've started first.
@@ -631,7 +629,7 @@ class LibraryRepository(private val store: LibraryStore) : MedusaRepository {
         val sort = f.sel(HORROR, FilterKeys.select(GROUP_SORT), sortDefault).let { if (it == "list" && list == null) "score" else it }
         var items = all.filter { t ->
             (status == "all" || (status == "seen") == t.watched) &&
-                (where == "anywhere" || (where == "plans" && mine(t).isNotEmpty()) || (where == "free" && free(t).isNotEmpty()) ||
+                (where == "anywhere" || (where == "free" && free(t).isNotEmpty()) ||
                     (where == "rent" && codes(t).isEmpty() && rentOf(t).isNotEmpty()) || (where.startsWith("svc:") && where.removePrefix("svc:") in codes(t)))
         }
         items = when (sort) {
@@ -640,14 +638,14 @@ class LibraryRepository(private val store: LibraryStore) : MedusaRepository {
             "year" -> items.sortedWith(compareByDescending<T> { it.year ?: 0 }.thenBy(String.CASE_INSENSITIVE_ORDER) { it.r.title })
             else -> items
         }
-        val used = lib.services.filter { s -> all.any { s.code in codes(it) } }.sortedByDescending { if (it.mine) 1 else 0 }
+        val used = lib.services.filter { s -> all.any { s.code in codes(it) } }.sortedByDescending { s -> all.count { s.code in codes(it) } }
         val sorts = listOf("score" to "Best reviewed") + (if (list != null) listOf("list" to "Your list order") else emptyList()) +
             listOf("year" to "Newest first", "title" to "Title A–Z")
-        val chips = listOf(FilterOption("anywhere", "Anywhere"), FilterOption("plans", "On my plans"), FilterOption("free", "Free with ads")) +
+        val chips = listOf(FilterOption("anywhere", "Anywhere"), FilterOption("free", "Free with ads")) +
             used.map { FilterOption("svc:${it.code}", it.name, dotArgb = argb(it.colour)) } + FilterOption("rent", "Rent only")
         return HorrorWall(
             title = if (list != null) "${list.year} horror" else "All horror",
-            summary = "${all.count { it.watched }} of ${all.size} seen · ${all.count { !it.watched && (mine(it).isNotEmpty() || free(it).isNotEmpty()) }} ready to watch on your plans or free",
+            summary = "${all.count { it.watched }} of ${all.size} seen · ${all.count { !it.watched && watchable(it) }} streaming in India",
             seenSegments = listOf("notseen" to "Not seen", "seen" to "Seen", "all" to "Everything").map { (k, l) -> FilterOption(k, l, selected = k == status) },
             sort = FilterSelect(GROUP_SORT, sorts.first { it.first == sort }.second, active = sort != sortDefault, options = sorts.map { (k, l) -> FilterOption(k, l, selected = k == sort) }),
             whereChips = chips.map { it.copy(selected = it.id == where) },
@@ -739,7 +737,7 @@ class LibraryRepository(private val store: LibraryStore) : MedusaRepository {
                         .filter { it.isNotEmpty() }.joinToString(" · ") + if (soon) " · coming" else "",
                     seen = t.watched,
                     upNext = t.id == n?.id,
-                    services = codes(t).take(3).map { c -> val sv = svcOrCode(c); ServiceTag(sv.name, sv.mine, argb(sv.colour)) },
+                    services = codes(t).take(3).map { c -> val sv = svcOrCode(c); ServiceTag(sv.name, argb(sv.colour)) },
                     posterUrl = t.r.poster,
                 )
             },
@@ -775,10 +773,10 @@ class LibraryRepository(private val store: LibraryStore) : MedusaRepository {
         val streaming = when {
             c.isNotEmpty() -> c.map { code ->
                 val sv = svcOrCode(code)
-                ServiceTag(sv.name + if (sv.mine) " · your plan" else if (sv.free) " · free" else "", sv.mine, argb(sv.colour))
+                ServiceTag(sv.name + if (sv.free) " · free" else "", argb(sv.colour))
             }
-            r.providerNames.isNotEmpty() -> r.providerNames.map { ServiceTag(it, false, 0xFF8B8A96) }
-            r.indiaStatus == "not_yet" -> listOf(ServiceTag("Not streaming in India yet", false, 0xFF6E6C7A))
+            r.providerNames.isNotEmpty() -> r.providerNames.map { ServiceTag(it, 0xFF8B8A96) }
+            r.indiaStatus == "not_yet" -> listOf(ServiceTag("Not streaming in India yet", 0xFF6E6C7A))
             else -> emptyList()
         }
         val rent = r.indiaRent.map { entry ->

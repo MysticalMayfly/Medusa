@@ -30,7 +30,7 @@ data class WatchOption(
     val id: String,
     val service: String,                  // "Netflix"
     val monogram: String,                 // "NF", shown in place of a logo
-    val kind: String,                     // "Your plan", "Rent ₹79"
+    val kind: String,                     // "Streaming", "Rent ₹79"
     val url: String? = null,              // opens the service's app (JustWatch watch link)
 )
 
@@ -137,10 +137,10 @@ data class BrowseUiState(
 /** Horror wall (a year, or All horror). */
 data class HorrorWall(
     val title: String,                    // "2025 horror"
-    val summary: String,                  // "17 of 142 seen · 106 ready to watch on your plans or free"
+    val summary: String,                  // "17 of 142 seen · 106 streaming in India"
     val seenSegments: List<FilterOption>, // Not seen / Seen / Everything
     val sort: FilterSelect,
-    val whereChips: List<FilterOption>,   // Anywhere / On my plans / Free with ads / services / Rent only
+    val whereChips: List<FilterOption>,   // Anywhere / Free with ads / services / Rent only
     val items: List<TitleCard>,
 )
 
@@ -201,7 +201,7 @@ data class UniverseUiState(
     val backdropUrl: String? = null,
 )
 
-data class ServiceTag(val name: String, val mine: Boolean, val argb: Long)
+data class ServiceTag(val name: String, val argb: Long)
 
 data class Fact(val label: String, val value: String)
 
