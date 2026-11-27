@@ -1,7 +1,7 @@
 {
-  "versionCode": 22,
+  "versionCode": 23,
   "versionName": "1.3",
-  "apkUrl": "https://raw.githubusercontent.com/MysticalMayfly/medusa/updates/medusa-1.3-b22.apk",
-  "sha256": "9be9e86c03ac5039a460f325e5d857ac432ea3bd304a8275bd7172729ca17ab4",
-  "notes": "The loading screen stays 15 seconds. When the carousel has focus, each end of the top bar shrinks toward its own corner. The top bar shows the square Medusa icon from the Mac app. During a trailer the synopsis folds away so the title sits just above Watch now. Down from the tabs now works on More and Universes. The Home carousel shows the poster again. Trailer subtitles are off."
+  "apkUrl": "https://raw.githubusercontent.com/MysticalMayfly/medusa/updates/medusa-1.3-b23.apk",
+  "sha256": "ca13aeb087e084edd6a77fd7e4c40a5c83d662339cd81c47b662c0b8bed51020",
+  "notes": "One trailer player is built during the loading screen and reused, so entering the carousel or changing picks no longer stalls to create a new one. The carousel text and poster fade out and in instead of rising. A dot is back between the year and the runtime. Titles stay on one line at one size, ending with an ellipsis when too long, and the synopsis is always two lines, so every pick lines up the same."
 }
