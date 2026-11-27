@@ -60,5 +60,15 @@ insert into public.profile_events(profile_id,kind,title_id,value,created_at)
 values ('p1','watched',3,'{"on":true}','2026-02-01Z');`);
 assert.equal((await db.query('select watched from public.profile_titles where title_id=3')).rows[0]?.watched,true,
   'Trusted desktop events must be applied in the cloud');
+await db.exec(`grant usage on schema public to anon; grant select on public.profiles,public.profile_titles to anon;
+grant insert on public.profile_events to anon;
+create policy "read profiles" on public.profiles for select to anon using (true);
+create policy "read profile titles" on public.profile_titles for select to anon using (true);
+create policy "send events" on public.profile_events for insert to anon with check (true);`);
+await db.exec(await readFile(new URL('../profile_privacy.sql',import.meta.url),'utf8'));
+await db.exec('set role anon');
+await assert.rejects(db.query('select * from public.profiles'));
+await assert.rejects(db.query('select * from public.profile_titles'));
+await db.exec('reset role');
 console.log('Profile sync: field conflict and account-ownership checks passed');
 await db.close();

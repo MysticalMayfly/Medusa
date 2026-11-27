@@ -71,10 +71,8 @@ create policy "read platforms" on public.platforms for select to anon using (tru
 grant select on public.titles, public.app_titles, public.services, public.platforms to anon;
 
 -- ---------------------------------------------------------------- profiles
--- Profiles are made on the TV (no sign-in, built-in avatars). The TV never edits these tables directly: it appends
--- what changed to profile_events (insert only), the Mac upkeeper copies events into the Master database and pushes
--- the result back into profiles and profile_titles, which the TV reads and caches. The Master stays the only copy
--- that is ever updated. Note: with the app's publishable key these lists are readable by anyone who has the APK.
+-- Profiles and title states are cloud-owned. Apply account_profile_links.sql, profile_cloud_sync.sql,
+-- and profile_privacy.sql in that order to enable authenticated account-scoped sync.
 
 create table if not exists public.profiles (
   id text primary key, name text not null, avatar int not null default 0, photo_url text,
@@ -107,9 +105,5 @@ alter table public.profile_events enable row level security;
 drop policy if exists "read profiles" on public.profiles;
 drop policy if exists "read profile titles" on public.profile_titles;
 drop policy if exists "send events" on public.profile_events;
-create policy "read profiles" on public.profiles for select to anon using (true);
-create policy "read profile titles" on public.profile_titles for select to anon using (true);
-create policy "send events" on public.profile_events for insert to anon with check (true);
-grant select on public.profiles, public.profile_titles to anon;
-grant insert on public.profile_events to anon;
-grant usage on sequence public.profile_events_id_seq to anon;
+revoke select on public.profiles, public.profile_titles from anon;
+revoke insert on public.profile_events from anon;
