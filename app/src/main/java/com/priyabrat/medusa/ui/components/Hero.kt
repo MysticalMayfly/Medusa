@@ -66,6 +66,7 @@ import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.Text
@@ -322,7 +323,17 @@ fun HeroCarousel(
                             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(META_DOT_GAP)) {
                                 listOf(pick.year, pick.runtime).filter { it.isNotBlank() }.forEachIndexed { n, part ->
                                     if (n > 0) Text("·", style = MedusaType.MonoStrong.copy(fontFamily = androidx.compose.ui.text.font.FontFamily.Default))
-                                    Text(part, style = MedusaType.MonoStrong)
+                                    // The space inside "151 min" / "1 season" is drawn in the proportional font too, so it
+                                    // is narrow like the dot's gaps, not a full mono character.
+                                    Text(
+                                        androidx.compose.ui.text.buildAnnotatedString {
+                                            part.split(' ').forEachIndexed { w, word ->
+                                                if (w > 0) withStyle(androidx.compose.ui.text.SpanStyle(fontFamily = androidx.compose.ui.text.font.FontFamily.Default)) { append(' ') }
+                                                append(word)
+                                            }
+                                        },
+                                        style = MedusaType.MonoStrong,
+                                    )
                                 }
                             }
                             pick.ratings.forEach { RatingBadge(it) }
