@@ -43,7 +43,7 @@ fun HorrorScreen(state: HorrorUiState, actions: HorrorActions, header: @Composab
     PageGrid {
         fullWidth("top") {
             Box {
-                HeroCarousel(state.picks.ifEmpty { listOfNotNull(state.pick) }, actions.hero, height = Dimens.PageHeroHeight, entry = heroEntry)
+                HeroCarousel(state.picks.ifEmpty { listOfNotNull(state.pick) }, actions.hero, entry = heroEntry)
                 header()
             }
         }

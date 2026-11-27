@@ -30,7 +30,6 @@ import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.geometry.CornerRadius
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
@@ -151,8 +150,8 @@ fun AppHeader(
  * counts and nothing waits on focus moving between tabs. Right on the last tab leaves for search. OK opens the
  * highlighted tab (useful when a page below the tabs, like Settings, is open).
  *
- * The pill sits on the open tab: inverted (light on dark) while the bar has focus, an outline when it does not
- * (and nothing when no tab is open).
+ * The pill sits on the open tab, inverted (light on dark), only while the bar has focus. Without focus there is no
+ * pill or outline; the open tab's name is just brighter than the others.
  * It jumps; nothing animates.
  */
 @Composable
@@ -190,17 +189,12 @@ private fun TabBar(current: Tab?, onTab: (Tab) -> Unit, requester: FocusRequeste
         horizontalArrangement = Arrangement.spacedBy(3.dp),
     ) {
         tabs.forEachIndexed { i, tab ->
-            // Off the tab pages (Search, Settings, a profile) no tab is open, so the pill shows only while the bar has focus.
-            val on = i == cursor && (focused || current != null)
+            val on = i == cursor
             Box(
                 Modifier
                     .height(Dimens.NavItemH)
                     .drawBehind {
-                        if (on) {
-                            val r = CornerRadius(size.height / 2)
-                            if (focused) drawRoundRect(MedusaColors.Fg, cornerRadius = r)
-                            else drawRoundRect(MedusaColors.Fg, cornerRadius = r, style = Stroke(1.dp.toPx()))
-                        }
+                        if (on && focused) drawRoundRect(MedusaColors.Fg, cornerRadius = CornerRadius(size.height / 2))
                     }
                     .padding(horizontal = 11.dp),
                 contentAlignment = Alignment.Center,
@@ -210,7 +204,7 @@ private fun TabBar(current: Tab?, onTab: (Tab) -> Unit, requester: FocusRequeste
                     style = MedusaType.Nav,
                     color = when {
                         on && focused -> MedusaColors.Inv
-                        on -> MedusaColors.Fg
+                        on && current != null -> MedusaColors.Fg
                         else -> MedusaColors.Muted
                     },
                 )

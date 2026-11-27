@@ -9,6 +9,7 @@ import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.border
 
 import androidx.compose.foundation.relocation.bringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewResponder
 
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.RepeatMode
@@ -60,6 +61,8 @@ import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.layout.layout
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -87,7 +90,8 @@ private val heroTints = listOf(Color(0xFF1B1A26), Color(0xFF231719), Color(0xFF1
  * The carousel ("Tonight's pick", tonight.css .tn-hero): full-bleed backdrop with a slow 18 s zoom,
  * title, meta, ratings, synopsis and the buttons Watch now, Interested, More info, Seen it.
  * A still stays 8 s, then the next pick fades in; it waits while focus is inside the carousel.
- * Left on Watch now goes to the previous pick, Right on Seen it to the next one.
+ * Trailers play only while focus is inside; then the carousel grows to the full screen height.
+ * Left and right on Watch now page it; Left on Interested goes back, Right on Seen it forward.
  *
  * Trailers (stage 1 milestone 6) will play behind the pick here; [HeroPick.trailerId] is the hook.
  *
@@ -100,7 +104,7 @@ fun HeroCarousel(
     picks: List<HeroPick>,
     actions: HeroActions,
     modifier: Modifier = Modifier,
-    height: Dp = Dimens.HeroHeight,
+    height: Dp = heroRestHeight(),
     showPoster: Boolean = true,
     entry: FocusRequester? = null,
     zoom: Boolean = false,
@@ -112,12 +116,18 @@ fun HeroCarousel(
     val openLink = rememberOpenLink()
     var index by remember(picks.size) { mutableIntStateOf(0) }
     var focusInside by remember { mutableStateOf(false) }
+    // Tells the shell the carousel has focus (it shrinks and fades the top bar).
+    val heroFocus = LocalHeroFocus.current
+    androidx.compose.runtime.DisposableEffect(heroFocus) { onDispose { heroFocus?.value = false } }
     var chooserOpen by remember { mutableStateOf(false) }
     val i = index.coerceIn(0, picks.lastIndex)
     val pick = picks[i]
     // From the current index state, not the value captured at the last draw: quick presses each count.
     fun step(by: Int) { index = (index.coerceIn(0, picks.lastIndex) + by + picks.size) % picks.size }
     val mainButton = entry ?: remember { FocusRequester() }
+    val firstRound = remember { FocusRequester() }
+    var heroSize by remember { mutableStateOf(androidx.compose.ui.geometry.Size.Zero) }
+    val wholeHero = remember { WholeHero { heroSize } }
     val bringHero = remember { androidx.compose.foundation.relocation.BringIntoViewRequester() }
     val scope = androidx.compose.runtime.rememberCoroutineScope()
 
@@ -139,7 +149,11 @@ fun HeroCarousel(
     val stillAlpha by androidx.compose.animation.core.animateFloatAsState(
         if (trailerShown) 0f else 1f, tween(TrailerTiming.FADE_MS), label = "heroStill",
     )
-    val trailerId = pick.trailerId?.takeIf { trailer != TRAILER_FAILED }
+    // Trailers play only while focus is in the carousel; otherwise it turns through the stills.
+    LaunchedEffect(focusInside) {
+        if (!focusInside) { trailerShown = false; trailer = TRAILER_PLAYING }
+    }
+    val trailerId = pick.trailerId?.takeIf { trailer != TRAILER_FAILED && focusInside }
     // A few seconds into a trailer the description fades and the left fade lightens, so most of the video shows.
     // Any button press brings the full look back for a few seconds.
     var nudge by remember { mutableStateOf(0) }
@@ -152,10 +166,12 @@ fun HeroCarousel(
         if (quiet && trailerShown) 1f else 0f, tween(TrailerTiming.FADE_MS), label = "heroQuiet",
     )
     LaunchedEffect(i, focusInside, chooserOpen, picks.size, trailer, trailerId, paused) {
-        if (picks.size <= 1 || focusInside || chooserOpen || paused) return@LaunchedEffect
+        if (picks.size <= 1 || chooserOpen || paused) return@LaunchedEffect
         when {
-            trailerId == null -> { delay(Motion.HeroStillMs.toLong()); step(1) }
-            trailer == TRAILER_ENDED -> { delay(TrailerTiming.AFTER_TRAILER_MS); step(1) }
+            // Not focused: the stills turn every few seconds.
+            !focusInside -> { delay(Motion.HeroStillMs.toLong()); step(1) }
+            // Focused: the next pick comes only after a trailer ends; a still waits for the remote.
+            trailerId != null && trailer == TRAILER_ENDED -> { delay(TrailerTiming.AFTER_TRAILER_MS); step(1) }
         }
     }
 
@@ -170,16 +186,30 @@ fun HeroCarousel(
         remember { mutableFloatStateOf(1f) }
     }
 
+    // With focus inside, the carousel grows to the full screen height and pushes the shelves below further down.
+    val screenH = androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp.dp
+    val grown by androidx.compose.animation.core.animateDpAsState(
+        if (focusInside) maxOf(height, screenH) else height, tween(Motion.ColorMs * 2), label = "heroHeight",
+    )
     Box(
         modifier
             .fillMaxWidth()
-            .height(height)
+            .layout { m, c ->
+                val h = grown.roundToPx()
+                val p = m.measure(c.copy(minHeight = h, maxHeight = h))
+                layout(p.width, h) { p.place(0, 0) }
+            }
             .onFocusChanged {
+                heroFocus?.value = it.hasFocus
                 // Whenever focus is in the carousel, show all of it: the title stays on screen with the buttons.
                 if (it.hasFocus && !focusInside) scope.launch { bringHero.bringIntoView() }
                 focusInside = it.hasFocus
             }
             .bringIntoViewRequester(bringHero)
+            .onSizeChanged { heroSize = androidx.compose.ui.geometry.Size(it.width.toFloat(), it.height.toFloat()) }
+            // A focused button asks the page to scroll it into view; the page would move it towards the middle and
+            // push the carousel half off screen. Every such request is turned into "show the whole carousel".
+            .bringIntoViewResponder(wholeHero)
             .onPreviewKeyEvent { if (it.type == KeyEventType.KeyDown) nudge++; false }
 
             // Away: once the page scrolls down to the rows, the trailer pauses (the Mac waited until 45 % was out of
@@ -263,7 +293,7 @@ fun HeroCarousel(
                             maxLines = 2, overflow = TextOverflow.Ellipsis,
                         )
                         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Dimens.Gap10)) {
-                            Text("${pick.year}  ·  ${pick.runtime}", style = MedusaType.MonoStrong)
+                            Text("${pick.year} ${pick.runtime}", style = MedusaType.MonoStrong)
                             pick.ratings.forEach { RatingBadge(it) }
                         }
                         Text(
@@ -272,53 +302,47 @@ fun HeroCarousel(
                         )
                     }
                 }
+                    // Watch now, with the three round buttons under it. Left and right on Watch now page the carousel;
+                    // left on Interested goes to the previous pick and right on Seen it to the next.
+                    fun Modifier.pages(left: Boolean, right: Boolean) = onKeyEvent { e ->
+                        if (e.type != KeyEventType.KeyDown || picks.size <= 1) false
+                        else if (left && e.key == Key.DirectionLeft) { step(-1); true }
+                        else if (right && e.key == Key.DirectionRight) { step(1); true }
+                        else false
+                    }
+                    WatchButton(
+                        pick.watchLabel,
+                        pick.watchOptions.map { it.monogram },
+                        onClick = {
+                            // One place to watch opens it straight away (tonight.js watchHtml); several open the chooser.
+                            if (pick.watchOptions.size > 1) chooserOpen = true else openLink(pick.watchOptions.firstOrNull()?.url)
+                        },
+                        modifier = Modifier
+                            .padding(top = Dimens.Gap8)
+                            .focusRequester(mainButton)
+                            // Down goes to the first round button (Interested), not the one nearest the middle.
+                            .focusProperties { down = firstRound }
+                            .pages(left = true, right = true),
+                    )
                     Row(
-                        Modifier.padding(top = Dimens.Gap8),
+                        Modifier.padding(top = Dimens.Gap4),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(Dimens.Gap12),
                     ) {
-                        WatchButton(
-                            pick.watchLabel,
-                            pick.watchOptions.map { it.monogram },
-                            onClick = {
-                                // One place to watch opens it straight away (tonight.js watchHtml); several open the chooser.
-                                if (pick.watchOptions.size > 1) chooserOpen = true else openLink(pick.watchOptions.firstOrNull()?.url)
-                            },
-                            modifier = Modifier
-                                .focusRequester(mainButton)
-                                // Left on the main button: previous pick (the ‹ arrow).
-                                .onKeyEvent { e ->
-                                    if (e.type == KeyEventType.KeyDown && e.key == Key.DirectionLeft && picks.size > 1) { step(-1); true } else false
-                                },
-                        )
                         GlassRound(
                             if (pick.interested) MedusaIcons.HeartFilled else MedusaIcons.Heart,
                             onClick = { actions.onInterested(pick.id, !pick.interested) },
                             on = pick.interested,
                             onTint = MedusaColors.Accent,
+                            modifier = Modifier.focusRequester(firstRound).pages(left = true, right = false),
                         )
                         GlassRound(MedusaIcons.Info, onClick = { actions.onOpen(pick.id) })
                         GlassRound(
                             MedusaIcons.Check,
                             onClick = { actions.onSeen(pick.id, !pick.seen) },
                             on = pick.seen,
-                            // Right on the last button: next pick (the › arrow).
-                            modifier = Modifier.onKeyEvent { e ->
-                                if (e.type == KeyEventType.KeyDown && e.key == Key.DirectionRight && picks.size > 1) { step(1); true } else false
-                            },
+                            modifier = Modifier.pages(left = false, right = true),
                         )
-                    }
-                    if (picks.size > 1) {
-                        Row(Modifier.padding(top = Dimens.Gap10), horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-                            picks.indices.forEach { n ->
-                                Box(
-                                    Modifier
-                                        .size(width = if (n == i) 32.dp else 17.dp, height = 3.dp)
-                                        .clip(RoundedCornerShape(3.dp))
-                                        .background(if (n == i) MedusaColors.Fg else MedusaColors.Fg.copy(alpha = 0.28f)),
-                                )
-                            }
-                        }
                     }
                 }
             if (showPoster) {
@@ -336,13 +360,6 @@ fun HeroCarousel(
                 }
             }
         }
-        // The Mac's ‹ › arrows (.tn-nav): previous and next pick, reached with left and right from the buttons.
-        // They are signs, not stops: left on the main button and right on the last button page the carousel, so the
-        // remote never lands on them (they used to catch focus and jump to each other). Inside the TV's safe margin.
-        if (picks.size > 1) {
-            HeroArrow(MedusaIcons.ChevronLeft, Modifier.align(Alignment.CenterStart).padding(start = 14.dp))
-            HeroArrow(MedusaIcons.ChevronRight, Modifier.align(Alignment.CenterEnd).padding(end = 14.dp))
-        }
     }
 
     if (chooserOpen) {
@@ -359,12 +376,22 @@ private const val TRAILER_PLAYING = 0
 private const val TRAILER_ENDED = 1
 private const val TRAILER_FAILED = 2
 
-/** The carousel's ‹ › signs: drawn like the round buttons, but never focusable. */
+/** Set by the carousel while it has focus; the shell shrinks and fades the top bar then. */
+val LocalHeroFocus = androidx.compose.runtime.staticCompositionLocalOf<androidx.compose.runtime.MutableState<Boolean>?> { null }
+
+/**
+ * The carousel's height at rest: it fills the screen except for a strip at the bottom, where the first shelf's
+ * title and the top edge of its pictures show.
+ */
 @Composable
-private fun HeroArrow(icon: androidx.compose.ui.graphics.vector.ImageVector, modifier: Modifier) {
-    Box(
-        modifier.size(30.dp).clip(androidx.compose.foundation.shape.CircleShape).background(MedusaColors.Bg.copy(alpha = 0.45f))
-            .border(1.dp, MedusaColors.Line2, androidx.compose.foundation.shape.CircleShape),
-        contentAlignment = Alignment.Center,
-    ) { Icon(icon, MedusaColors.Fg.copy(alpha = 0.8f), 14.dp) }
+fun heroRestHeight(): Dp = (androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp - PEEK_DP).dp
+
+private const val PEEK_DP = 78
+
+/** Turns a button's scroll request into one for the whole carousel (see [HeroCarousel]). */
+@OptIn(androidx.compose.foundation.ExperimentalFoundationApi::class)
+private class WholeHero(private val size: () -> androidx.compose.ui.geometry.Size) : androidx.compose.foundation.relocation.BringIntoViewResponder {
+    override fun calculateRectForParent(localRect: androidx.compose.ui.geometry.Rect) =
+        androidx.compose.ui.geometry.Rect(androidx.compose.ui.geometry.Offset.Zero, size())
+    override suspend fun bringChildIntoView(localRect: () -> androidx.compose.ui.geometry.Rect?) = Unit
 }

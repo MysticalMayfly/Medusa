@@ -18,6 +18,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.graphics.graphicsLayer
 import com.priyabrat.medusa.data.FilterKeys
 import com.priyabrat.medusa.data.MedusaRepository
 import com.priyabrat.medusa.ui.browse.BrowseActions
@@ -91,6 +92,15 @@ fun MedusaApp(
     val anchor = remember { HeaderAnchor() }
     // Whether focus is anywhere in the header. Only read by the focus effect below, so it never recomposes.
     val inHeader = remember { mutableStateOf(false) }
+    // While the carousel has focus the top bar shrinks a little and fades back. Animated outside composition and
+    // read only while drawing, so it never rebuilds the page.
+    val heroFocus = remember { mutableStateOf(false) }
+    val barDip = remember { androidx.compose.animation.core.Animatable(0f) }
+    LaunchedEffect(Unit) {
+        androidx.compose.runtime.snapshotFlow { heroFocus.value }.collect {
+            launch { barDip.animateTo(if (it) 1f else 0f, androidx.compose.animation.core.tween(FADE_MS)) }
+        }
+    }
     var panelId by remember { mutableStateOf<String?>(null) }
     var query by remember { mutableStateOf("") }
     val toast = remember { ToastState() }
@@ -146,7 +156,11 @@ fun MedusaApp(
     val open: (String) -> Unit = remember { { panelId = it } }
     val hero = remember(repo) { HeroActions(onOpen = open, onInterested = repo::setInterested, onSeen = repo::setWatched) }
 
-    CompositionLocalProvider(LocalToast provides toast::show, LocalTrailersPaused provides (panelId != null)) {
+    CompositionLocalProvider(
+        LocalToast provides toast::show,
+        LocalTrailersPaused provides (panelId != null),
+        com.priyabrat.medusa.ui.components.LocalHeroFocus provides heroFocus,
+    ) {
         // No background here: the window background (themes.xml window_bg, the same colour) already
         // paints it. Painting it twice cost the TV's GPU a full-screen fill on every frame.
         Box(Modifier.fillMaxSize()) {
@@ -251,9 +265,8 @@ fun MedusaApp(
                 alpha = veil.asState(),
                 heroHeight = (screen as? Screen.Top)?.tab?.let {
                     when (it) {
-                        Tab.Home -> com.priyabrat.medusa.ui.theme.Dimens.HeroHeight
                         Tab.More, Tab.Universes -> null
-                        else -> com.priyabrat.medusa.ui.theme.Dimens.PageHeroHeight
+                        else -> com.priyabrat.medusa.ui.components.heroRestHeight()
                     }
                 },
             )
@@ -276,7 +289,14 @@ fun MedusaApp(
                     onProfile = { profiles.current?.let { go(Screen.Profile(it.id)) } },
                     modifier = Modifier
                         .offset { androidx.compose.ui.unit.IntOffset(0, anchor.offsetY.toInt()) }
-                        .onFocusChanged { inHeader.value = it.hasFocus },
+                        .onFocusChanged { inHeader.value = it.hasFocus }
+                        .graphicsLayer {
+                            val d = barDip.value
+                            scaleX = 1f - BAR_SHRINK * d
+                            scaleY = scaleX
+                            alpha = 1f - BAR_FADE * d
+                            transformOrigin = androidx.compose.ui.graphics.TransformOrigin(0.5f, 0f)
+                        },
                 )
             }
             toast.Host()
@@ -328,6 +348,8 @@ private const val EXIT_WINDOW_MS = 2_500L
 /** How long the remote must rest on a tab before its page is built. Quicker presses only move the pill. */
 private const val SETTLE_MS = 180L
 private const val FADE_MS = 200
+private const val BAR_SHRINK = 0.1f
+private const val BAR_FADE = 0.55f
 
 /** Things asked once per app process, not once per screen (coming back to Medusa doesn't ask again). */
 private object Session { var askedWho = false }

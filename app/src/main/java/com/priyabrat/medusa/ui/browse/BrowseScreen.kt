@@ -64,7 +64,7 @@ fun BrowseScreen(state: BrowseUiState, actions: BrowseActions, header: @Composab
             // arrive a moment after the page opens, and rebuilding the header then threw the remote's focus away.
             // More has no carousel (BrowseKind.More), so it keeps a short gap instead.
             Box {
-                if (state.kind != BrowseKind.More) HeroCarousel(picks, actions.hero, height = Dimens.PageHeroHeight, entry = heroEntry)
+                if (state.kind != BrowseKind.More) HeroCarousel(picks, actions.hero, entry = heroEntry)
                 else Spacer(Modifier.height(Dimens.HeaderControl + Dimens.SafeTop + Dimens.Gap22))
                 header()
             }
