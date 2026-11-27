@@ -1,19 +1,10 @@
 package com.priyabrat.medusa.ui.shell
 
-import androidx.compose.ui.focus.onFocusChanged
-
-import androidx.compose.ui.input.key.type
-
-import androidx.compose.ui.input.key.key
-
-import androidx.compose.ui.input.key.onPreviewKeyEvent
-
-import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.focusGroup
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
@@ -25,6 +16,10 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -33,7 +28,14 @@ import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.colorResource
 import androidx.compose.ui.res.painterResource
@@ -46,11 +48,11 @@ import com.priyabrat.medusa.ui.components.MedusaIcons
 import com.priyabrat.medusa.ui.components.focusRing
 import com.priyabrat.medusa.ui.components.rememberFocusable
 import com.priyabrat.medusa.ui.components.tvClick
+import com.priyabrat.medusa.ui.model.ProfileTile
 import com.priyabrat.medusa.ui.model.Tab
 import com.priyabrat.medusa.ui.theme.Dimens
 import com.priyabrat.medusa.ui.theme.MedusaColors
 import com.priyabrat.medusa.ui.theme.MedusaType
-import com.priyabrat.medusa.ui.theme.Motion
 import com.priyabrat.medusa.ui.theme.Shapes
 
 /** Tab labels in the Mac order: Home · Movies · TV shows · Horror · More · Universes. */
@@ -66,18 +68,22 @@ fun tabLabel(tab: Tab): String = stringResource(
     },
 )
 
-/** Which header control should take focus when a screen opens. */
+/** The header's height: the space a page leaves for it at its top. */
+val HeaderHeight = Dimens.SafeTop + Dimens.Logo
+
+/** The header's focus targets. The tab bar is one focus target, not one per tab. */
 class HeaderFocus(
-    val tabs: Map<Tab, FocusRequester> = Tab.entries.associateWith { FocusRequester() },
+    val tabs: FocusRequester = FocusRequester(),
     val search: FocusRequester = FocusRequester(),
     val settings: FocusRequester = FocusRequester(),
     val profile: FocusRequester = FocusRequester(),
 )
 
 /**
- * The header (header.top): Medusa logo, the tabs in a rounded bar (.mainnav), search and the gear.
- * The Mac's Review dot, sync pill, theme switch and Add title are not on the TV.
- * The gear shows a dot when an update is waiting.
+ * The header: Medusa logo, the tab bar, search, the profile in use and the gear (with a dot when an update waits).
+ *
+ * Up from a page lands on [upTarget] (the tab bar on tab pages, the matching control elsewhere),
+ * never on whichever tab happens to sit nearest.
  */
 @Composable
 fun AppHeader(
@@ -87,19 +93,27 @@ fun AppHeader(
     onSettings: () -> Unit,
     updateWaiting: Boolean,
     focus: HeaderFocus,
+    upTarget: FocusRequester,
     modifier: Modifier = Modifier,
-    profile: com.priyabrat.medusa.ui.model.ProfileTile? = null,
+    profile: ProfileTile? = null,
     onProfile: () -> Unit = {},
-    /** Down from a tab goes here (the carousel's main button) instead of the nearest thing below. */
+    /** Down from the tab bar goes here (the carousel's main button) instead of the nearest thing below. */
     down: FocusRequester? = null,
 ) {
-    // Tabs open on highlight only when you move along them with left and right. Arriving from below (Up from a
-    // page) just lands on the open tab, so it never switches pages by accident.
-    val alongTabs = androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
     Row(
         modifier
             .fillMaxWidth()
-            .padding(start = Dimens.SafeH, end = Dimens.SafeH, top = Dimens.SafeTop),
+            .height(HeaderHeight)
+            .padding(start = Dimens.SafeH, end = Dimens.SafeH, top = Dimens.SafeTop)
+            .focusProperties {
+                onEnter = {
+                    if (requestedFocusDirection == FocusDirection.Up) {
+                        // The avatar is missing while no profile is in use: fall back to the tabs.
+                        if (!runCatching { upTarget.requestFocus(FocusDirection.Enter) }.getOrDefault(false)) focus.tabs.requestFocus()
+                    }
+                }
+            }
+            .focusGroup(),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(Dimens.Gap10),
     ) {
@@ -118,34 +132,7 @@ fun AppHeader(
                 modifier = Modifier.requiredSize(Dimens.Logo * 1.5f),
             )
         }
-        Row(
-            Modifier
-                .clip(Shapes.Pill)
-                .background(MedusaColors.Surface.copy(alpha = 0.72f))
-                .border(1.dp, MedusaColors.Line, Shapes.Pill)
-                .padding(3.dp)
-                // Up from a screen lands on the open tab, not on whichever tab sits nearest.
-                .focusProperties {
-                    onEnter = {
-                        if (requestedFocusDirection == FocusDirection.Up && current != null) {
-                            focus.tabs.getValue(current).requestFocus()
-                        }
-                    }
-                }
-                .onPreviewKeyEvent { e ->
-                    if (e.type == androidx.compose.ui.input.key.KeyEventType.KeyDown) {
-                        alongTabs.value = e.key == androidx.compose.ui.input.key.Key.DirectionLeft || e.key == androidx.compose.ui.input.key.Key.DirectionRight
-                    }
-                    false
-                }
-                .onFocusChanged { if (!it.hasFocus) alongTabs.value = false }
-                .focusGroup(),
-            horizontalArrangement = Arrangement.spacedBy(3.dp),
-        ) {
-            Tab.entries.forEach { tab ->
-                NavItem(tabLabel(tab), selected = tab == current, onClick = { onTab(tab) }, requester = focus.tabs.getValue(tab), down = down, armed = alongTabs)
-            }
-        }
+        TabBar(current, onTab, focus.tabs, down)
         Box(Modifier.weight(1f))
         IconCircle(MedusaIcons.Search, onSearch, Modifier.focusRequester(focus.search))
         if (profile != null) {
@@ -158,55 +145,76 @@ fun AppHeader(
         IconCircle(MedusaIcons.Gear, onSettings, Modifier.focusRequester(focus.settings), dot = updateWaiting)
     }
 }
+
+/**
+ * The tabs as a single focus target. Left and right move the pill one tab and open it at once, so every press
+ * counts and nothing waits on focus moving between tabs. Right on the last tab leaves for search. OK opens the
+ * highlighted tab (useful when a page below the tabs, like Settings, is open).
+ *
+ * The pill sits on the open tab: inverted (light on dark) while the bar has focus, an outline when it does not
+ * (and nothing when no tab is open).
+ * It jumps; nothing animates.
+ */
 @Composable
-private fun NavItem(
-    label: String,
-    selected: Boolean,
-    onClick: () -> Unit,
-    requester: FocusRequester,
-    down: FocusRequester? = null,
-    armed: androidx.compose.runtime.State<Boolean>? = null,
-) {
-    val f = rememberFocusable()
-    val focused = f.focused.value
-    // Moving along the tabs with left and right opens each one, like a TV launcher: no OK press needed.
-    val latestClick = androidx.compose.runtime.rememberUpdatedState(onClick)
-    androidx.compose.runtime.LaunchedEffect(focused, selected) {
-        if (focused && !selected && armed?.value != false) {
-            latestClick.value()
-        }
+private fun TabBar(current: Tab?, onTab: (Tab) -> Unit, requester: FocusRequester, down: FocusRequester?) {
+    val tabs = Tab.entries
+    // Where the pill is. Follows the open tab; on pages without one (Search, Settings) it stays where it was.
+    var cursor by remember { mutableIntStateOf((current ?: Tab.Home).ordinal) }
+    if (current != null && cursor != current.ordinal) cursor = current.ordinal
+    var focused by remember { mutableStateOf(false) }
+
+    fun move(to: Int) {
+        cursor = to
+        onTab(tabs[to])
     }
-    // Read only while drawing, so the tab's colour change redraws it without rebuilding the header.
-    val bg = animateColorAsState(
-        when {
-            focused -> MedusaColors.Fg
-            selected -> MedusaColors.Raised
-            else -> Color.Transparent
-        },
-        tween(Motion.ColorMs), label = "navBg",
-    )
-    Box(
+
+    Row(
         Modifier
+            .clip(Shapes.Pill)
+            .background(MedusaColors.Surface.copy(alpha = 0.72f))
+            .border(1.dp, MedusaColors.Line, Shapes.Pill)
+            .padding(3.dp)
             .focusRequester(requester)
             .then(if (down != null) Modifier.focusProperties { this.down = down } else Modifier)
-            // Keep the focus indicator inside the clipped navigation bar; an outside ring is cut off
-            // and overlaps its neighbours. A focused tab is filled, while the active tab has a border.
-            .height(Dimens.NavItemH)
-            .clip(Shapes.Pill)
-            .drawBehind { drawRect(bg.value) }
-            .border(1.dp, if (selected && !focused) MedusaColors.Fg else Color.Transparent, Shapes.Pill)
-            .tvClick(f, onClick = onClick)
-            .padding(horizontal = 11.dp),
-        contentAlignment = Alignment.Center,
+            .onFocusChanged { focused = it.isFocused }
+            .onPreviewKeyEvent { e ->
+                if (e.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+                when (e.key) {
+                    Key.DirectionLeft -> { if (cursor > 0) move(cursor - 1); true }
+                    Key.DirectionRight -> if (cursor < tabs.lastIndex) { move(cursor + 1); true } else false
+                    Key.DirectionCenter, Key.Enter, Key.NumPadEnter -> { onTab(tabs[cursor]); true }
+                    else -> false
+                }
+            }
+            .focusable(),
+        horizontalArrangement = Arrangement.spacedBy(3.dp),
     ) {
-        Text(
-            label,
-            style = MedusaType.Nav,
-            color = when {
-                focused -> MedusaColors.Inv
-                selected -> MedusaColors.Fg
-                else -> MedusaColors.Muted
-            },
-        )
+        tabs.forEachIndexed { i, tab ->
+            // Off the tab pages (Search, Settings, a profile) no tab is open, so the pill shows only while the bar has focus.
+            val on = i == cursor && (focused || current != null)
+            Box(
+                Modifier
+                    .height(Dimens.NavItemH)
+                    .drawBehind {
+                        if (on) {
+                            val r = CornerRadius(size.height / 2)
+                            if (focused) drawRoundRect(MedusaColors.Fg, cornerRadius = r)
+                            else drawRoundRect(MedusaColors.Fg, cornerRadius = r, style = Stroke(1.dp.toPx()))
+                        }
+                    }
+                    .padding(horizontal = 11.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    tabLabel(tab),
+                    style = MedusaType.Nav,
+                    color = when {
+                        on && focused -> MedusaColors.Inv
+                        on -> MedusaColors.Fg
+                        else -> MedusaColors.Muted
+                    },
+                )
+            }
+        }
     }
 }

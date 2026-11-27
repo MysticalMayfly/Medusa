@@ -3,6 +3,7 @@ package com.priyabrat.medusa.ui.shell
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.offset
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
@@ -16,6 +17,7 @@ import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import com.priyabrat.medusa.data.FilterKeys
 import com.priyabrat.medusa.data.MedusaRepository
 import com.priyabrat.medusa.ui.browse.BrowseActions
@@ -81,6 +83,14 @@ fun MedusaApp(
 ) {
     val stack = remember { mutableStateListOf<Screen>(Screen.Top(Tab.Home)) }
     val screen = stack.last()
+    // The page actually built. While navigation moves (quick left and right on the tabs), only the placeholder
+    // shows; the page is built once the remote settles, then fades in over the placeholder (PageVeil).
+    var built by remember { mutableStateOf(screen) }
+    val page: Screen? = built.takeIf { it == screen }
+    val veil = remember { androidx.compose.animation.core.Animatable(0f) }
+    val anchor = remember { HeaderAnchor() }
+    // Whether focus is anywhere in the header. Only read by the focus effect below, so it never recomposes.
+    val inHeader = remember { mutableStateOf(false) }
     var panelId by remember { mutableStateOf<String?>(null) }
     var query by remember { mutableStateOf("") }
     val toast = remember { ToastState() }
@@ -114,7 +124,7 @@ fun MedusaApp(
                 // Back to the top of Home first, with focus on the Home tab.
                 scope.launch {
                     homeList.scrollToItem(0)
-                    headerFocus.tabs.getValue(Tab.Home).requestWhenReady()
+                    headerFocus.tabs.requestWhenReady()
                 }
                 toast.show(exitHint)
             }
@@ -126,21 +136,9 @@ fun MedusaApp(
         is Screen.Universe -> Tab.Universes
         else -> null
     }
-    val headerContent = androidx.compose.runtime.rememberUpdatedState<@Composable () -> Unit>({
-        AppHeader(
-            current = currentTab,
-            onTab = { go(Screen.Top(it)) },
-            onSearch = { go(Screen.Search) },
-            onSettings = { go(Screen.Settings) },
-            updateWaiting = settings.updateWaiting,
-            focus = headerFocus,
-            profile = profiles.current,
-            down = heroEntry.takeIf { screen is Screen.Top && screen.tab != Tab.More && screen.tab != Tab.Universes },
-            onProfile = { profiles.current?.let { go(Screen.Profile(it.id)) } },
-        )
-    })
-    // Keep the same focus nodes as the header moves between screen layouts.
-    val header = remember { androidx.compose.runtime.movableContentOf { headerContent.value() } }
+    // Pages keep an empty slot where the header sits; the header itself is drawn once, above the pages.
+    val header: @Composable () -> Unit = remember(anchor) { { HeaderSlot(anchor) } }
+    val hasCarousel = page is Screen.Top && page.tab != Tab.More && page.tab != Tab.Universes
 
     // Actions are built once (remember), not on every recomposition of the shell. A new object each
     // time made Compose rebuild the whole open screen whenever the shell changed, e.g. when the
@@ -152,7 +150,9 @@ fun MedusaApp(
         // No background here: the window background (themes.xml window_bg, the same colour) already
         // paints it. Painting it twice cost the TV's GPU a full-screen fill on every frame.
         Box(Modifier.fillMaxSize()) {
-            when (val s = screen) {
+            when (val s = page) {
+                // Placeholder: holds the header's place until the page is built.
+                null -> if (screen != Screen.Profiles) header()
                 is Screen.Top -> when (s.tab) {
                     Tab.Home -> {
                         val state by remember { repo.home() }.collectAsState(HomeUiState())
@@ -246,6 +246,39 @@ fun MedusaApp(
                     ProfileScreen(state, actions, header)
                 }
             }
+            PageVeil(
+                pending = page == null,
+                alpha = veil.asState(),
+                heroHeight = (screen as? Screen.Top)?.tab?.let {
+                    when (it) {
+                        Tab.Home -> com.priyabrat.medusa.ui.theme.Dimens.HeroHeight
+                        Tab.More, Tab.Universes -> null
+                        else -> com.priyabrat.medusa.ui.theme.Dimens.PageHeroHeight
+                    }
+                },
+            )
+            if (anchor.visible) {
+                AppHeader(
+                    current = currentTab,
+                    onTab = { go(Screen.Top(it)) },
+                    onSearch = { go(Screen.Search) },
+                    onSettings = { go(Screen.Settings) },
+                    updateWaiting = settings.updateWaiting,
+                    focus = headerFocus,
+                    upTarget = when (screen) {
+                        Screen.Search -> headerFocus.search
+                        Screen.Settings -> headerFocus.settings
+                        is Screen.Profile -> headerFocus.profile
+                        else -> headerFocus.tabs
+                    },
+                    profile = profiles.current,
+                    down = heroEntry.takeIf { hasCarousel },
+                    onProfile = { profiles.current?.let { go(Screen.Profile(it.id)) } },
+                    modifier = Modifier
+                        .offset { androidx.compose.ui.unit.IntOffset(0, anchor.offsetY.toInt()) }
+                        .onFocusChanged { inHeader.value = it.hasFocus },
+                )
+            }
             toast.Host()
         }
 
@@ -265,12 +298,25 @@ fun MedusaApp(
         else if (profiles.ready && !Session.askedWho && profiles.profiles.size > 1) { Session.askedWho = true; go(Screen.Profiles) }
     }
 
+    // Navigation: the placeholder covers at once; the page is built when the remote has settled on it,
+    // then the placeholder fades out over it in one go.
+    LaunchedEffect(screen) {
+        if (built == screen) return@LaunchedEffect
+        veil.snapTo(1f)
+        if (screen is Screen.Top) delay(SETTLE_MS)
+        built = screen
+        repeat(2) { withFrameNanos { } }
+        veil.animateTo(0f, androidx.compose.animation.core.tween(FADE_MS))
+    }
+
     // Put focus somewhere sensible whenever the screen changes (the old screen's focused element is gone).
+    // The tab bar is one focus target that is never rebuilt, so on tab pages this only matters when focus
+    // was elsewhere; it can never pull focus back to an older tab.
     LaunchedEffect(screen) {
         // Home starts on its tab so the carousel keeps turning; it waits while focus is inside it.
         when (screen) {
-            is Screen.Top -> headerFocus.tabs.getValue(screen.tab).requestWhenReady()
-            is Screen.Universe -> headerFocus.tabs.getValue(Tab.Universes).requestWhenReady()
+            // Focus already in the header (moving along the tabs, or on to search) stays where the remote put it.
+            is Screen.Top, is Screen.Universe -> if (!inHeader.value) headerFocus.tabs.requestWhenReady()
             Screen.Search -> searchField.requestWhenReady()
             Screen.Settings -> settingsButton.requestWhenReady()
             Screen.Profiles -> Unit                       // the picker focuses its first profile itself
@@ -279,6 +325,9 @@ fun MedusaApp(
     }}
 
 private const val EXIT_WINDOW_MS = 2_500L
+/** How long the remote must rest on a tab before its page is built. Quicker presses only move the pill. */
+private const val SETTLE_MS = 180L
+private const val FADE_MS = 200
 
 /** Things asked once per app process, not once per screen (coming back to Medusa doesn't ask again). */
 private object Session { var askedWho = false }
