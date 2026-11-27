@@ -150,7 +150,6 @@ def seed():
         c.execute('INSERT INTO titles (id, kind, tmdb_id, imdb_id, title, year, rt_score, horror, added_at) VALUES (?,?,?,?,?,?,?,?,?)'
                   ' ON CONFLICT(id) DO UPDATE SET imdb_id=excluded.imdb_id, title=excluded.title, year=excluded.year,'
                   ' rt_score=excluded.rt_score, horror=excluded.horror', (i, kind, tid, imdb, title, year, rt, horror, stamp))
-    c.execute("INSERT OR IGNORE INTO profiles VALUES ('p1', 'Me', 0, NULL, ?)", (stamp,))
     for s in SERVICES:
         c.execute('INSERT OR IGNORE INTO services (code, name, colour, free, sort) VALUES (?,?,?,?,?)', s)
     for p in PLATFORMS:
@@ -443,6 +442,18 @@ def sync():
     counts = supabase_mirror.sync_mirror(MIRROR, profiles_only=True)
     print('mirror: %d profiles and %d profile title rows' %
           (counts.get('profiles', 0), counts.get('profile_titles', 0)))
+
+
+def canonicalize_master_profile(c, old_id, new_id):
+    """Rename a legacy master profile without deleting its stored history."""
+    with c:
+        if not c.execute('SELECT 1 FROM profiles WHERE id=?', (old_id,)).fetchone():
+            raise ValueError('Legacy master profile is missing')
+        if c.execute('SELECT 1 FROM profiles WHERE id=?', (new_id,)).fetchone():
+            raise ValueError('Destination master profile already exists')
+        c.execute('UPDATE profiles SET id=? WHERE id=?', (new_id, old_id))
+        c.execute('UPDATE profile_titles SET profile_id=? WHERE profile_id=?', (new_id, old_id))
+        c.execute('UPDATE applied_events SET profile_id=? WHERE profile_id=?', (new_id, old_id))
 
 
 if __name__ == '__main__':
