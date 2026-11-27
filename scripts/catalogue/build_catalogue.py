@@ -13,7 +13,8 @@ ever updated. Supabase only receives what this script pushes; the TV only reads 
     python3 scripts/catalogue/build_catalogue.py upkeep    # fetch + build + publish + sync
 
 Master tables, plain columns (no JSON blobs):
-  titles        one row per title: kind, tmdb_id, imdb_id, title, year. Only these come from the two CSVs.
+  titles        one row per title: kind, tmdb_id, imdb_id, title, year, RT score. Only these come from the two CSVs
+                (~/Desktop/Medusa/films.csv and tv_shows.csv).
   title_data    everything the app shows, fetched: TMDB (details, genres, art, trailers, Indian streaming), the Mac app's
                 database ~/Desktop/Medusa Mac/data/medusa.db where it has the title (IMDb and RT scores, trailer,
                 direct watch links, franchise), and IMDb's public ratings file for the IMDb score of the rest.
@@ -36,9 +37,11 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 
 FILMS_DIR = os.path.expanduser(os.environ.get('MEDUSA_FILMS_DIR', '~/Desktop/Films'))
-FILMS_CSV = os.path.join(FILMS_DIR, 'films.csv')
-SHOWS_CSV = os.path.join(FILMS_DIR, 'tv_shows.csv')
 MASTER_DIR = os.path.expanduser(os.environ.get('MEDUSA_MASTER_DIR', '~/Desktop/Medusa'))
+# The two title lists live in the Medusa folder (older copies in ~/Desktop/Films are used only if they are missing).
+CSV_DIR = MASTER_DIR if os.path.exists(os.path.join(MASTER_DIR, 'films.csv')) else FILMS_DIR
+FILMS_CSV = os.path.join(CSV_DIR, 'films.csv')
+SHOWS_CSV = os.path.join(CSV_DIR, 'tv_shows.csv')
 MASTER = os.path.join(MASTER_DIR, 'medusa-master.db')
 MAC_DB = os.path.expanduser(os.environ.get('MEDUSA_MAC_DB', '~/Desktop/Medusa Mac/data/medusa.db'))
 IMDB_RATINGS = 'https://datasets.imdbws.com/title.ratings.tsv.gz'
@@ -52,7 +55,7 @@ def master():
     c.execute('PRAGMA foreign_keys = ON')
     c.executescript(
         'CREATE TABLE IF NOT EXISTS titles (id INTEGER PRIMARY KEY, kind TEXT NOT NULL, tmdb_id INTEGER NOT NULL,'
-        ' imdb_id TEXT, title TEXT NOT NULL, year INTEGER, added_at TEXT NOT NULL);'
+        ' imdb_id TEXT, title TEXT NOT NULL, year INTEGER, rt_score INTEGER, added_at TEXT NOT NULL);'
         'CREATE TABLE IF NOT EXISTS title_data (id INTEGER PRIMARY KEY REFERENCES titles(id) ON DELETE CASCADE,'
         ' original_title TEXT, runtime INTEGER, countries TEXT, language TEXT,'
         ' imdb_rating REAL, imdb_votes INTEGER, tmdb_rating REAL, tmdb_votes INTEGER, rt_score INTEGER,'
@@ -135,14 +138,15 @@ def seed():
             if not tid.isdigit():
                 continue
             want[stable_id(kind, tid)] = (kind, int(tid), (r.get('imdb_id') or '').strip() or None,
-                                         (r.get('title') or '').strip(), num((r.get('year') or '')[:4], int))
+                                         (r.get('title') or '').strip(), num((r.get('year') or '')[:4], int),
+                                         num(r.get('rotten_tomatoes'), int))
     have = {i for (i,) in c.execute('SELECT id FROM titles')}
     gone = have - set(want)
     c.executemany('DELETE FROM titles WHERE id=?', [(i,) for i in gone])
     stamp = now()
-    for i, (kind, tid, imdb, title, year) in want.items():
-        c.execute('INSERT INTO titles VALUES (?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET imdb_id=excluded.imdb_id,'
-                  ' title=excluded.title, year=excluded.year', (i, kind, tid, imdb, title, year, stamp))
+    for i, (kind, tid, imdb, title, year, rt) in want.items():
+        c.execute('INSERT INTO titles (id, kind, tmdb_id, imdb_id, title, year, rt_score, added_at) VALUES (?,?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET imdb_id=excluded.imdb_id,'
+                  ' title=excluded.title, year=excluded.year, rt_score=excluded.rt_score', (i, kind, tid, imdb, title, year, rt, stamp))
     c.execute("INSERT OR IGNORE INTO profiles VALUES ('p1', 'Me', 0, NULL, ?)", (stamp,))
     for s in SERVICES:
         c.execute('INSERT OR IGNORE INTO services VALUES (?,?,?,?,?,?)', s)
@@ -286,14 +290,14 @@ def joined(xs):
 
 def build():
     c = master()
-    rows = c.execute('SELECT id, kind, tmdb_id, imdb_id FROM titles ORDER BY id').fetchall()
+    rows = c.execute('SELECT id, kind, tmdb_id, imdb_id, rt_score FROM titles ORDER BY id').fetchall()
     mac = mac_titles()
-    imdb = imdb_ratings({i for _, _, _, i in rows if i})
+    imdb = imdb_ratings({r[3] for r in rows if r[3]})
     stamp = now()
     c.execute('DELETE FROM title_data')
     c.execute('DELETE FROM seasons')
     c.execute('DELETE FROM watch_offers')
-    for tid_, kind, tmdb_id, imdb_id in rows:
+    for tid_, kind, tmdb_id, imdb_id, csv_rt in rows:
         try:
             tm = json.load(open(cache_path(kind, tmdb_id)))
         except (OSError, ValueError):
@@ -325,7 +329,7 @@ def build():
             tm.get('original_language'),
             m.get('imdb_rating') or (ir[0] if ir else None), m.get('imdb_votes') or (ir[1] if ir else None),
             tm.get('vote_average') or None, tm.get('vote_count') or None,
-            m.get('rt_score'),
+            csv_rt if csv_rt is not None else m.get('rt_score'),
             1 if 'Horror' in genres else 0,
             joined(genres), franchise, tm.get('overview') or None, tm.get('tagline') or None,
             IMG + 'w342' + poster if poster else None, IMG + 'w1280' + backdrop if backdrop else None,
@@ -361,7 +365,7 @@ def catalogue():
     lst = lambda v: [x for x in (v or '').split(' | ') if x]
     ep = lambda s, n, a: {'season': s, 'number': n, 'airdate': a} if s is not None else None
     out = []
-    for r in c.execute('SELECT * FROM titles JOIN title_data USING (id) ORDER BY id'):
+    for r in c.execute('SELECT titles.kind, titles.tmdb_id, titles.imdb_id, titles.title, titles.year, title_data.* FROM titles JOIN title_data ON title_data.id = titles.id ORDER BY titles.id'):
         out.append({
             'id': r['id'], 'kind': r['kind'], 'title': r['title'], 'year': r['year'], 'original_title': r['original_title'],
             'tmdb_id': r['tmdb_id'], 'imdb_id': r['imdb_id'], 'runtime': r['runtime'], 'countries': lst(r['countries']),
