@@ -1,7 +1,7 @@
 {
-  "versionCode": 23,
+  "versionCode": 24,
   "versionName": "1.3",
-  "apkUrl": "https://raw.githubusercontent.com/MysticalMayfly/medusa/updates/medusa-1.3-b23.apk",
-  "sha256": "ca13aeb087e084edd6a77fd7e4c40a5c83d662339cd81c47b662c0b8bed51020",
-  "notes": "One trailer player is built during the loading screen and reused, so entering the carousel or changing picks no longer stalls to create a new one. The carousel text and poster fade out and in instead of rising. A dot is back between the year and the runtime. Titles stay on one line at one size, ending with an ellipsis when too long, and the synopsis is always two lines, so every pick lines up the same."
+  "apkUrl": "https://raw.githubusercontent.com/MysticalMayfly/medusa/updates/medusa-1.3-b24.apk",
+  "sha256": "2e30dc86b636252fe46616f57c4103a32711387340519821b968da2df780019e",
+  "notes": "Carousel titles of up to 22 characters show in full on one line at the same size; longer ones stop at 22 and end with an ellipsis. The dot between the year and the runtime sits closer."
 }
