@@ -1,7 +1,7 @@
 {
-  "versionCode": 27,
+  "versionCode": 28,
   "versionName": "1.3",
-  "apkUrl": "https://raw.githubusercontent.com/MysticalMayfly/medusa/updates/medusa-1.3-b27.apk",
-  "sha256": "68065fea6b95adb75efce721327dbb442fd47e02ebe1556af11204543ad20e69",
-  "notes": "The carousel trailer plays in the top 800 pixels instead of the full screen, and the page below moves up to meet it, on every page with a carousel. The Medusa icon is the leftmost stop in the top bar, with a soft glow when selected (OK opens Home). The year, dot and runtime or seasons have narrow spaces between them."
+  "apkUrl": "https://raw.githubusercontent.com/MysticalMayfly/medusa/updates/medusa-1.3-b28.apk",
+  "sha256": "81a38d2d6cd344ed644c9bd9a5637af225375692baeefce8267415c4527345ab",
+  "notes": "Account sessions renew automatically. Watched, interested and progress changes sync with your account, with offline changes retried when the connection returns."
 }
