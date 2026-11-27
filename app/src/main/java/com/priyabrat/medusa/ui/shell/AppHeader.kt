@@ -28,6 +28,8 @@ import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.key.Key
@@ -129,11 +131,30 @@ fun AppHeader(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(Dimens.Gap10),
         ) {
+            // The mark is the bar's leftmost focus stop (left from the first tab). OK opens Home. Focused, a soft
+            // white glow spreads behind it (Prince, 2026-11-27).
+            val mark = rememberFocusable()
             Image(
                 painter = painterResource(R.drawable.medusa_mark),
                 contentDescription = stringResource(R.string.app_name),
                 contentScale = ContentScale.Fit,
-                modifier = Modifier.size(Dimens.Logo),
+                modifier = Modifier
+                    .size(Dimens.Logo)
+                    .drawBehind {
+                        if (mark.focused.value) drawCircle(
+                            Brush.radialGradient(
+                                // The mark covers the inner half; the glow shows from its edge outwards.
+                                0.45f to MedusaColors.Fg.copy(alpha = 0.42f),
+                                0.7f to MedusaColors.Fg.copy(alpha = 0.14f),
+                                1f to Color.Transparent,
+                                center = center,
+                                radius = size.minDimension * MARK_GLOW,
+                            ),
+                            radius = size.minDimension * MARK_GLOW,
+                        )
+                    }
+                    .then(if (down != null) Modifier.focusProperties { this.down = down } else Modifier)
+                    .tvClick(mark) { onTab(Tab.Home) },
             )
             TabBar(current, onTab, focus.tabs, down)
         }
@@ -166,6 +187,9 @@ fun AppHeader(
 /** While the carousel has focus each end of the bar shrinks this much toward its own screen edge, and fades this much. */
 private const val BAR_SHRINK = 0.1f
 private const val BAR_FADE = 0.55f
+
+/** The focused mark's glow reaches this many times the mark's size from its centre. */
+private const val MARK_GLOW = 1f
 
 /**
  * The tabs as a single focus target. Left and right move the pill one tab and open it at once, so every press
@@ -201,7 +225,8 @@ private fun TabBar(current: Tab?, onTab: (Tab) -> Unit, requester: FocusRequeste
             .onPreviewKeyEvent { e ->
                 if (e.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
                 when (e.key) {
-                    Key.DirectionLeft -> { if (cursor > 0) move(cursor - 1); true }
+                    // Left on the first tab leaves for the Medusa mark.
+                    Key.DirectionLeft -> if (cursor > 0) { move(cursor - 1); true } else false
                     Key.DirectionRight -> if (cursor < tabs.lastIndex) { move(cursor + 1); true } else false
                     Key.DirectionCenter, Key.Enter, Key.NumPadEnter -> { onTab(tabs[cursor]); true }
                     else -> false

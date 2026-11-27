@@ -234,6 +234,8 @@ fun HeroCarousel(
             }
         }
         // The trailer sits outside that cached layer: video frames must not repaint the backdrop under them.
+        // Prince, 2026-11-27: the player is TRAILER_H tall (800 px on the 1080p TV), not the full screen, centred
+        // TRAILER_H / 2 from the top. The video fills the width at 16:9; its top and bottom are cropped.
         if (trailerId != null) {
             key(pick.id) {
                 TrailerLayer(
@@ -243,8 +245,19 @@ fun HeroCarousel(
                     onEnded = { trailer = TRAILER_ENDED },
                     onFailed = { trailer = TRAILER_FAILED },
                     onShown = { trailerShown = it },
+                    modifier = Modifier.align(Alignment.TopStart).fillMaxWidth().height(TRAILER_H),
                 )
             }
+            // A short fade at the video's bottom edge, so it melts into the black below instead of ending in a line.
+            // Shown with the trailer only; the still under it keeps its own look.
+            Box(
+                Modifier
+                    .align(Alignment.TopStart)
+                    .fillMaxWidth()
+                    .height(TRAILER_H)
+                    .graphicsLayer { alpha = 1f - stillAlpha }
+                    .background(Brush.verticalGradient(0.82f to Color.Transparent, 1f to MedusaColors.Bg)),
+            )
         }
         // The fades over backdrop and trailer, painted once into their own cached layer: one copy per frame instead of
         // two full-width gradient fills (the TV's GPU is the bottleneck when scrolling).
@@ -303,9 +316,10 @@ fun HeroCarousel(
                             modifier = Modifier.wrapContentWidth(Alignment.Start, unbounded = true).widthIn(max = TITLE_MAX_W),
                         )
                         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Dimens.Gap10)) {
-                            // Year · runtime with a tight dot: the dot is drawn in the proportional font (the mono font's
-                            // dot and spaces are a full character wide each).
-                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(Dimens.Gap4)) {
+                            // Year · runtime (or seasons): the dot is drawn in the proportional font (the mono font's dot and
+                            // spaces are a full character wide each). Prince, 2026-11-27: a visible gap each side of the dot,
+                            // narrower than the mono font's full space (b23) and wider than b24's.
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(META_DOT_GAP)) {
                                 listOf(pick.year, pick.runtime).filter { it.isNotBlank() }.forEachIndexed { n, part ->
                                     if (n > 0) Text("·", style = MedusaType.MonoStrong.copy(fontFamily = androidx.compose.ui.text.font.FontFamily.Default))
                                     Text(part, style = MedusaType.MonoStrong)
@@ -409,6 +423,8 @@ private fun slideFade() = androidx.compose.animation.ContentTransform(
 )
 
 private const val TITLE_MAX_CHARS = 22
+private val META_DOT_GAP = 5.dp    // each side of the year · runtime dot
+private val TRAILER_H = 400.dp     // the trailer player's height: 800 px at 320 dpi
 private val TITLE_MAX_W = 700.dp   // from the left margin to just short of the poster on a 960 dp wide screen
 
 private const val TRAILER_PLAYING = 0
