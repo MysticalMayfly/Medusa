@@ -9,6 +9,8 @@ import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
 import com.priyabrat.medusa.BuildConfig
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import org.json.JSONObject
 import org.json.JSONArray
 import java.net.HttpURLConnection
@@ -26,6 +28,71 @@ class GoogleAccount(private val context: Context) {
     class Result(val name: String, val photoUrl: String?, val email: String?, val userId: String, val accessToken: String, val refreshToken: String)
 
     val configured: Boolean get() = BuildConfig.GOOGLE_WEB_CLIENT_ID.isNotEmpty() && CatalogueSource.configured
+
+    /** Refresh every saved account shortly before expiry, without reviving an account signed out mid-request. */
+    suspend fun renewSessions() = withContext(Dispatchers.IO) {
+        refreshMutex.withLock {
+            val prefs = context.getSharedPreferences("google", Context.MODE_PRIVATE)
+            val profiles = synchronized(sessionLock) { prefs.all.keys.filter { it.endsWith(".user") }.map { it.removeSuffix(".user") } }
+            for (profile in profiles) {
+                val current = synchronized(sessionLock) {
+                    val user = prefs.getString("$profile.user", null)
+                    val access = prefs.getString("$profile.access", null)
+                    val refresh = prefs.getString("$profile.refresh", null)
+                    if (user == null || access == null || refresh == null) null else SessionRenewal.Tokens(user, access, refresh)
+                } ?: continue
+                // A transient network failure keeps the old refresh token for the next attempt.
+                runCatching {
+                    SessionRenewal.renew(current, java.time.Instant.now().epochSecond,
+                        exchange = { token -> refreshSession(token) },
+                        replace = { old, updated -> synchronized(sessionLock) {
+                            if (prefs.getString("$profile.user", null) != old.userId ||
+                                prefs.getString("$profile.refresh", null) != old.refresh) false
+                            else prefs.edit().putString("$profile.access", updated.access)
+                                .putString("$profile.refresh", updated.refresh).commit()
+                        } })
+                }
+                val access = synchronized(sessionLock) { prefs.getString("$profile.access", null) }
+                if (access != null) runCatching {
+                    val remote = lookupLinkedProfile(current.userId, access)
+                    val valid = ProfileIdentity.linked(profile, current.userId, remote)
+                    if (valid != null) synchronized(sessionLock) {
+                        if (prefs.getString("$profile.user", null) == current.userId &&
+                            prefs.getString("$profile.access", null) == access) {
+                            prefs.edit().putString("$profile.cloud", valid).apply()
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private fun lookupLinkedProfile(userId: String, token: String): String? {
+        check(ProfileIdentity.forUser(userId) != null)
+        val c = URL("${BuildConfig.SUPABASE_URL.trimEnd('/')}/rest/v1/account_profile_links?select=profile_id&user_id=eq.$userId").openConnection() as HttpURLConnection
+        return try {
+            c.connectTimeout = 10_000; c.readTimeout = 20_000
+            c.setRequestProperty("apikey", BuildConfig.SUPABASE_KEY)
+            c.setRequestProperty("Authorization", "Bearer $token")
+            check(c.responseCode in 200..299) { "Could not check the linked profile" }
+            val rows = JSONArray(c.inputStream.bufferedReader().use { it.readText() })
+            if (rows.length() == 1) rows.getJSONObject(0).getString("profile_id") else null
+        } finally { c.disconnect() }
+    }
+
+    private fun refreshSession(refreshToken: String): SessionRenewal.Tokens {
+        val c = URL("${BuildConfig.SUPABASE_URL.trimEnd('/')}/auth/v1/token?grant_type=refresh_token").openConnection() as HttpURLConnection
+        try {
+            c.requestMethod = "POST"; c.doOutput = true; c.connectTimeout = 10_000; c.readTimeout = 20_000
+            c.setRequestProperty("apikey", BuildConfig.SUPABASE_KEY)
+            c.setRequestProperty("Content-Type", "application/json")
+            c.outputStream.use { it.write(JSONObject().put("refresh_token", refreshToken).toString().toByteArray()) }
+            check(c.responseCode in 200..299) { "Could not renew the account session" }
+            val session = JSONObject(c.inputStream.bufferedReader().use { it.readText() })
+            return SessionRenewal.Tokens(session.getJSONObject("user").getString("id"),
+                session.getString("access_token"), session.getString("refresh_token"))
+        } finally { c.disconnect() }
+    }
 
     /** Shows the account picker; throws with a short reason when it is cancelled or fails. */
     suspend fun signIn(activity: android.app.Activity): Result {
@@ -111,7 +178,9 @@ class GoogleAccount(private val context: Context) {
             return if (rows.length() == 0) null else rows.getJSONObject(0).getString("profile_id")
         }
         lookup()?.let {
-            check(existingProfile == null || existingProfile == it) { "This Google account is linked to a different profile" }
+            val locallyLinked = existingProfile != null && context.getSharedPreferences("google", Context.MODE_PRIVATE)
+                .getString("$existingProfile.user", null) == r.userId && ProfileIdentity.forUser(r.userId) == it
+            check(existingProfile == null || existingProfile == it || locallyLinked) { "This Google account is linked to a different profile" }
             return@withContext it
         }
         check(existingProfile == null) { "This existing profile needs to be linked before it can use this Google account" }
@@ -146,21 +215,39 @@ class GoogleAccount(private val context: Context) {
     }
 
     companion object {
+        private val refreshMutex = Mutex()
+        private val sessionLock = Any()
         /** The session is kept per profile in the app's private preferences (never in the catalogue cache). */
-        fun save(context: Context, profile: String, r: Result) {
+        fun save(context: Context, profile: String, r: Result, cloudProfile: String) = synchronized(sessionLock) {
             context.getSharedPreferences("google", Context.MODE_PRIVATE).edit()
                 .putString("$profile.user", r.userId).putString("$profile.email", r.email)
                 .putString("$profile.access", r.accessToken).putString("$profile.refresh", r.refreshToken)
+                .putString("$profile.cloud", cloudProfile)
                 .apply()
         }
 
         fun email(context: Context, profile: String): String? = context.getSharedPreferences("google", Context.MODE_PRIVATE).getString("$profile.email", null)
 
+        fun accessToken(context: Context, profile: String): String? = synchronized(sessionLock) {
+            context.getSharedPreferences("google", Context.MODE_PRIVATE).getString("$profile.access", null)
+        }
+
+        fun cloudProfile(context: Context, profile: String): String? = synchronized(sessionLock) {
+            val prefs = context.getSharedPreferences("google", Context.MODE_PRIVATE)
+            val user = prefs.getString("$profile.user", null)
+            ProfileIdentity.linked(profile, user, prefs.getString("$profile.cloud", profile))
+        }
+
+        fun localProfileForUser(context: Context, userId: String): String? = synchronized(sessionLock) {
+            context.getSharedPreferences("google", Context.MODE_PRIVATE).all.entries
+                .firstOrNull { it.key.endsWith(".user") && it.value == userId }?.key?.removeSuffix(".user")
+        }
+
         fun isSignedIn(context: Context, profile: String): Boolean = context.getSharedPreferences("google", Context.MODE_PRIVATE).contains("$profile.user")
 
-        fun signOut(context: Context, profile: String) {
+        fun signOut(context: Context, profile: String) = synchronized(sessionLock) {
             val p = context.getSharedPreferences("google", Context.MODE_PRIVATE)
-            p.edit().apply { listOf("user", "email", "access", "refresh").forEach { remove("$profile.$it") } }.apply()
+            p.edit().apply { listOf("user", "email", "access", "refresh", "cloud").forEach { remove("$profile.$it") } }.apply()
         }
     }
 }

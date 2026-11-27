@@ -8,6 +8,7 @@ If that build is then not published, remove its row.
 
 | Build | Version | Date | APK | Changes |
 |---|---|---|---|---|
+| b28 | 1.3 | 2026-11-27 | `medusa-1.3-b28.apk` | Account sessions renew automatically. Watched, interested and progress changes sync with your account, with offline changes retried when the connection returns. |
 | b27 | 1.3 | 2026-11-27 | `medusa-1.3-b27.apk` | The carousel trailer plays in the top 800 pixels instead of the full screen, and the page below moves up to meet it, on every page with a carousel. The Medusa icon is the leftmost stop in the top bar, with a soft glow when selected (OK opens Home). The year, dot and runtime or seasons have narrow spaces between them. |
 | b26 | 1.3 | 2026-11-27 | `medusa-1.3-b26.apk` | Scan the sign-in QR code and sign in on your phone without typing a TV code. Existing account profiles and history remain linked. |
 | b25 | 1.3 | 2026-11-27 | `medusa-1.3-b25.apk` | The app only says where a title streams. Home has a Streaming on row for each service (Netflix, JioHotstar and so on). Horror rows read Streaming on, and the summary counts titles streaming in India. Watch now labels say Streaming, Free, Rent or Buy, and every service tag looks the same. |

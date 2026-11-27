@@ -1,16 +1,15 @@
 #!/usr/bin/env python3
-"""Medusa's upkeeper: keeps the master database on the Mac and pushes the maintained view to Supabase for the TV.
+"""Medusa's upkeeper: stages the Mac catalogue in the desktop mirror and syncs it with Supabase.
 
-The master database is ~/Desktop/Medusa/medusa-master.db: the single source of truth and the only copy that is
-ever updated. Supabase only receives what this script pushes; the TV only reads Supabase and keeps its own cache.
+The catalogue master is ~/Desktop/Medusa/Medusa.db. Catalogue changes are staged in
+~/Desktop/Medusa/supabase.db before being sent to Supabase. Profile data is cloud-owned.
 
     python3 scripts/catalogue/build_catalogue.py seed      # the master's titles = exactly the titles in ~/Desktop/Films
                                                           #   (films.csv, tv_shows.csv); titles not in them are removed
-    python3 scripts/catalogue/build_catalogue.py fetch     # TMDB details for every master title (cached, resumable)
-    python3 scripts/catalogue/build_catalogue.py build     # fill title_data in the master: TMDB, the Mac app, IMDb
-    python3 scripts/catalogue/build_catalogue.py publish   # push the catalogue to Supabase (service role key)
-    python3 scripts/catalogue/build_catalogue.py sync      # profiles: devices' changes into the Master, then back out
-    python3 scripts/catalogue/build_catalogue.py upkeep    # fetch + build + publish + sync
+    python3 scripts/catalogue/build_catalogue.py build     # fill title_data in the master: TMDB (fresh), the Mac app, IMDb
+    python3 scripts/catalogue/build_catalogue.py publish   # stage the catalogue in the mirror, then sync it
+    python3 scripts/catalogue/build_catalogue.py sync      # refresh the mirror; never push old master profiles
+    python3 scripts/catalogue/build_catalogue.py upkeep    # seed + build + publish
 
 Master tables, plain columns (no JSON blobs):
   titles        one row per title: kind, tmdb_id, imdb_id, title, year, RT score, horror. Only these come from the two CSVs
@@ -19,7 +18,7 @@ Master tables, plain columns (no JSON blobs):
                 database ~/Desktop/Medusa Mac/data/medusa.db where it has the title (IMDb and RT scores, trailer,
                 direct watch links, franchise), and IMDb's public ratings file for the IMDb score of the rest.
   seasons, watch_offers, services, platforms, meta, profiles, profile_titles, applied_events.
-TMDB token: ~/Desktop/Films/.tmdb_key. Cache: ~/Desktop/Medusa/tmdb_cache/.
+TMDB token: ~/Desktop/Films/.tmdb_key. Nothing is cached: every build asks TMDB afresh, so streaming info stays current.
 Supabase settings: ~/Desktop/Medusa/.supabase.env (never in this repo or the app).
 Lists in title_data (genres, countries, services, ...) are text joined with ' | '.
 Standard library only.
@@ -42,10 +41,10 @@ MASTER_DIR = os.path.expanduser(os.environ.get('MEDUSA_MASTER_DIR', '~/Desktop/M
 CSV_DIR = MASTER_DIR if os.path.exists(os.path.join(MASTER_DIR, 'films.csv')) else FILMS_DIR
 FILMS_CSV = os.path.join(CSV_DIR, 'films.csv')
 SHOWS_CSV = os.path.join(CSV_DIR, 'tv_shows.csv')
-MASTER = os.path.join(MASTER_DIR, 'medusa-master.db')
+MASTER = os.path.join(MASTER_DIR, 'Medusa.db')
+MIRROR = os.path.join(MASTER_DIR, 'supabase.db')
 MAC_DB = os.path.expanduser(os.environ.get('MEDUSA_MAC_DB', '~/Desktop/Medusa Mac/data/medusa.db'))
 IMDB_RATINGS = 'https://datasets.imdbws.com/title.ratings.tsv.gz'
-CACHE = os.path.join(MASTER_DIR, 'tmdb_cache')
 SCHEMA = os.path.join(os.path.dirname(__file__), 'schema.sql')
 
 
@@ -177,50 +176,46 @@ def token():
     return t
 
 
-def cache_path(kind, tmdb_id):
-    return os.path.join(CACHE, '%s_%s.json' % (kind, tmdb_id))
-
-
 def fetch():
-    os.makedirs(CACHE, exist_ok=True)
+    """TMDB details for every master title, fresh (in memory, nothing saved): {(kind, tmdb_id): data}.
+    A title TMDB no longer knows maps to {}; a title that could not be fetched is left out, so build keeps its old data."""
     tok = token()
     auth = {'Authorization': 'Bearer ' + tok} if tok.startswith('eyJ') else {}
     key = '' if auth else '&api_key=' + tok
-    todo = [(k, t) for k, t in titles() if not os.path.exists(cache_path(k, t))]
-    todo = list(dict.fromkeys(todo))
-    print('%d to fetch (%d already cached)' % (len(todo), len(titles()) - len(todo)))
+    todo = list(dict.fromkeys(titles()))
+    print('fetching %d titles from TMDB' % len(todo))
+    out = {}
     lock = threading.Lock()
     done = [0]
-    gate = threading.Semaphore(16)
 
     def one(item):
         kind, tid = item
         path = ('movie' if kind == 'movie' else 'tv') + '/' + tid
         url = 'https://api.themoviedb.org/3/%s?append_to_response=videos,watch/providers&language=en-US%s' % (path, key)
+        got = None
         for attempt in range(8):
-            with gate:
-                try:
-                    req = urllib.request.Request(url, headers=dict(auth, Accept='application/json'))
-                    body = urllib.request.urlopen(req, timeout=20).read()
-                    with open(cache_path(kind, tid), 'wb') as f:
-                        f.write(body)
+            try:
+                req = urllib.request.Request(url, headers=dict(auth, Accept='application/json'))
+                got = json.loads(urllib.request.urlopen(req, timeout=20).read())
+                break
+            except urllib.error.HTTPError as e:
+                if e.code == 404:
+                    got = {}
                     break
-                except urllib.error.HTTPError as e:
-                    if e.code == 404:
-                        with open(cache_path(kind, tid), 'w') as f:
-                            f.write('{"missing": true}')
-                        break
-                    time.sleep(0.5 * (attempt + 1))
-                except Exception:
-                    time.sleep(0.5 * (attempt + 1))
+                time.sleep(0.5 * (attempt + 1))
+            except Exception:
+                time.sleep(0.5 * (attempt + 1))
         with lock:
+            if got is not None:
+                out[item] = got
             done[0] += 1
-            if done[0] % 250 == 0:
+            if done[0] % 1000 == 0:
                 print('  %d / %d' % (done[0], len(todo)))
 
     with ThreadPoolExecutor(16) as ex:
         list(ex.map(one, todo))
-    print('fetch done')
+    print('fetched %d, %d failed (their old data is kept)' % (len(out), len(todo) - len(out)))
+    return out
 
 
 # ---------------------------------------------------------------- build
@@ -297,17 +292,17 @@ def build():
     rows = c.execute('SELECT id, kind, tmdb_id, imdb_id, rt_score, horror FROM titles ORDER BY id').fetchall()
     mac = mac_titles()
     imdb = imdb_ratings({r[3] for r in rows if r[3]})
+    tmdb = fetch()
     stamp = now()
-    c.execute('DELETE FROM title_data')
-    c.execute('DELETE FROM seasons')
-    c.execute('DELETE FROM watch_offers')
+    built = 0
     for tid_, kind, tmdb_id, imdb_id, csv_rt, csv_horror in rows:
-        try:
-            tm = json.load(open(cache_path(kind, tmdb_id)))
-        except (OSError, ValueError):
-            tm = {}
-        if tm.get('missing'):
-            tm = {}
+        tm = tmdb.get((kind, str(tmdb_id)))
+        if tm is None and c.execute('SELECT 1 FROM title_data WHERE id=?', (tid_,)).fetchone():
+            continue   # TMDB did not answer this time: keep what the master has
+        tm = tm or {}
+        built += 1
+        for table, col in (('title_data', 'id'), ('seasons', 'title_id'), ('watch_offers', 'title_id')):
+            c.execute('DELETE FROM %s WHERE %s=?' % (table, col), (tid_,))
         m = mac.get((kind, str(tmdb_id))) or {}
         prov = ((tm.get('watch/providers') or {}).get('results') or {}).get('IN') or {}
         stream = [p['provider_name'] for t in ('flatrate', 'ads', 'free') for p in prov.get(t) or []]
@@ -353,8 +348,8 @@ def build():
                       (tid_, o.get('code'), o.get('pkg'), o.get('name'), o.get('type'), o.get('url')))
     c.execute("INSERT OR REPLACE INTO meta VALUES ('built_at', ?)", (stamp,))
     c.commit()
-    print('%d titles built into %s (%d matched in the Mac app, %d IMDb scores from IMDb)' % (
-        len(rows), MASTER, sum(1 for r in rows if (r[1], str(r[2])) in mac), len(imdb)))
+    print('%d of %d titles built into %s (%d matched in the Mac app, %d IMDb scores from IMDb)' % (
+        built, len(rows), MASTER, sum(1 for r in rows if (r[1], str(r[2])) in mac), len(imdb)))
 
 
 def catalogue():
@@ -405,27 +400,15 @@ def supabase_env():
 
 
 def publish():
-    env = supabase_env()
-    url, key = env['SUPABASE_URL'].rstrip('/'), env['SUPABASE_SERVICE_ROLE_KEY']
+    """Stage the master catalogue in the desktop mirror, then send its pending changes to Supabase."""
+    import supabase_mirror
+    if not os.path.isfile(MASTER) or not os.path.isfile(MIRROR):
+        raise FileNotFoundError('Medusa.db or supabase.db is missing; nothing was published')
     data = catalogue()
-    headers = {'apikey': key, 'Authorization': 'Bearer ' + key, 'Content-Type': 'application/json',
-               'Prefer': 'resolution=merge-duplicates,return=minimal'}
-
-    def post(table, rows):
-        for i in range(0, len(rows), 500):
-            req = urllib.request.Request('%s/rest/v1/%s?on_conflict=%s' % (url, table, 'code' if table == 'services' else 'slug' if table == 'platforms' else 'id'),
-                                         data=json.dumps(rows[i:i + 500]).encode(), headers=headers, method='POST')
-            urllib.request.urlopen(req, timeout=60).read()
-        print('%s: %d rows' % (table, len(rows)))
-
-    post('services', data['services'])
-    post('platforms', data['platforms'])
-    stamp = data['built_at']
-    post('titles', [dict(t, published_at=stamp) for t in data['titles']])
-    # titles no longer in the CSVs leave the catalogue
-    req = urllib.request.Request('%s/rest/v1/titles?published_at=lt.%s' % (url, stamp), headers=headers, method='DELETE')
-    urllib.request.urlopen(req, timeout=60).read()
-    print('published')
+    with sqlite3.connect(MIRROR, timeout=30) as db:
+        staged = supabase_mirror.stage_master(db, data)
+    counts = supabase_mirror.sync_mirror(MIRROR)
+    print('catalogue: %d rows staged; %d titles in Supabase mirror' % (staged, counts.get('titles', 0)))
 
 
 # ---------------------------------------------------------------- profiles
@@ -453,53 +436,17 @@ def norm(ts):
 
 
 def sync():
-    """Profiles: copy the devices' events into the Master, then push the Master's profiles back to Supabase.
-    Newest change wins per title; events are kept in applied_events and removed from Supabase once applied."""
-    c = master()
-    events = rest('GET', 'profile_events?select=*&order=id&limit=10000') or []
-    for e in events:
-        pid, kind, tid, v, at = e['profile_id'], e['kind'], e['title_id'], e.get('value') or {}, norm(e['created_at'])
-        if kind == 'profile':
-            c.execute('INSERT INTO profiles (id, name, avatar, photo_url, updated_at) VALUES (?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET '
-                      'name=excluded.name, avatar=excluded.avatar, photo_url=excluded.photo_url, updated_at=excluded.updated_at '
-                      'WHERE excluded.updated_at > profiles.updated_at',
-                      (pid, (v.get('name') or 'Profile')[:20], int(v.get('avatar') or 0), v.get('photo_url'), at))
-        elif kind == 'delete_profile':
-            c.execute('DELETE FROM profiles WHERE id=?', (pid,))
-            c.execute('DELETE FROM profile_titles WHERE profile_id=?', (pid,))
-        elif tid is not None and c.execute('SELECT 1 FROM profiles WHERE id=?', (pid,)).fetchone():
-            cur = c.execute('SELECT updated_at FROM profile_titles WHERE profile_id=? AND title_id=?', (pid, tid)).fetchone()
-            if cur and cur[0] > at:
-                pass   # a newer change is already in the Master
-            else:
-                c.execute('INSERT OR IGNORE INTO profile_titles (profile_id, title_id, updated_at) VALUES (?,?,?)', (pid, tid, at))
-                if kind == 'watched':
-                    c.execute('UPDATE profile_titles SET watched=?, watched_at=?, updated_at=? WHERE profile_id=? AND title_id=?',
-                              (1 if v.get('on') else 0, v.get('at') if v.get('on') else None, at, pid, tid))
-                elif kind == 'interested':
-                    c.execute('UPDATE profile_titles SET interested=?, updated_at=? WHERE profile_id=? AND title_id=?',
-                              (1 if v.get('on') else 0, at, pid, tid))
-                elif kind == 'progress':
-                    c.execute('UPDATE profile_titles SET prog_season=?, prog_episode=?, prog_at=?, updated_at=? WHERE profile_id=? AND title_id=?',
-                              (v.get('season'), v.get('episode'), v.get('at'), at, pid, tid))
-        c.execute('INSERT OR IGNORE INTO applied_events VALUES (?,?,?,?,?,?,?,?)',
-                  (e['id'], pid, kind, tid, json.dumps(v), e.get('device'), at, now()))
-    c.commit()
-    if events:
-        rest('DELETE', 'profile_events?id=lte.%d' % events[-1]['id'])
-    c.row_factory = sqlite3.Row
-    profiles = [dict(r) for r in c.execute('SELECT id, name, avatar, photo_url, updated_at FROM profiles')]
-    rows = [dict(r, watched=bool(r['watched']), interested=bool(r['interested'])) for r in c.execute('SELECT * FROM profile_titles')]
-    rest('POST', 'profiles?on_conflict=id', profiles, 'resolution=merge-duplicates,return=minimal')
-    keep = ','.join('"%s"' % p['id'] for p in profiles) or '""'
-    rest('DELETE', 'profiles?id=not.in.(%s)' % urllib.request.quote(keep, safe='",()'))
-    for i in range(0, len(rows), 500):
-        rest('POST', 'profile_titles?on_conflict=profile_id,title_id', rows[i:i + 500], 'resolution=merge-duplicates,return=minimal')
-    print('profiles: %d events applied, %d profiles, %d rows pushed' % (len(events), len(profiles), len(rows)))
+    """Refresh the desktop mirror from Supabase without pushing old master profile data."""
+    import supabase_mirror
+    if not os.path.isfile(MIRROR):
+        raise FileNotFoundError('supabase.db is missing; no profiles were changed')
+    counts = supabase_mirror.sync_mirror(MIRROR, profiles_only=True)
+    print('mirror: %d profiles and %d profile title rows' %
+          (counts.get('profiles', 0), counts.get('profile_titles', 0)))
 
 
 if __name__ == '__main__':
     cmd = sys.argv[1] if len(sys.argv) > 1 else 'build'
     def upkeep():
-        seed(); fetch(); build(); publish(); sync()
-    {'seed': seed, 'fetch': fetch, 'build': build, 'publish': publish, 'sync': sync, 'upkeep': upkeep}[cmd]()
+        seed(); build(); publish()
+    {'seed': seed, 'build': build, 'publish': publish, 'sync': sync, 'upkeep': upkeep}[cmd]()

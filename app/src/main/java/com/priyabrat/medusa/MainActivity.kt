@@ -12,6 +12,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.repeatOnLifecycle
 import com.priyabrat.medusa.data.LibraryRepository
 import com.priyabrat.medusa.data.library.CatalogueSource
 import com.priyabrat.medusa.data.library.GoogleAccount
@@ -22,6 +24,8 @@ import kotlinx.coroutines.CancellationException
 import com.priyabrat.medusa.data.library.LibraryStore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.withContext
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
@@ -51,7 +55,11 @@ class MainActivity : AppCompatActivity(), Updater.Listener {
 
     /** Your library, imported once from the Mac (Settings > Import library from Mac); screens stay the same. */
     private val libraryStore by lazy { LibraryStore(applicationContext) }
-    private val repository by lazy { LibraryRepository(libraryStore).also { r -> r.googleSignedIn = { GoogleAccount.isSignedIn(applicationContext, it) } } }
+    private val repository by lazy { LibraryRepository(libraryStore).also { r ->
+        r.googleSignedIn = { GoogleAccount.isSignedIn(applicationContext, it) }
+        r.googleAccessToken = { GoogleAccount.accessToken(applicationContext, it) }
+        r.googleCloudProfile = { GoogleAccount.cloudProfile(applicationContext, it) }
+    } }
 
     private var settings by mutableStateOf(
         SettingsUiState(version = "", status = "", buttonLabel = "", buttonEnabled = true, progressPercent = null, updateWaiting = false),
@@ -66,6 +74,23 @@ class MainActivity : AppCompatActivity(), Updater.Listener {
                 .build()
         }
         updater = Updater(this, this)
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                val accounts = GoogleAccount(applicationContext)
+                while (isActive) {
+                    accounts.renewSessions()
+                    delay(15_000)
+                }
+            }
+        }
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                while (isActive) {
+                    runCatching { repository.syncProfiles() }
+                    delay(15_000)
+                }
+            }
+        }
         settings = settings.copy(
             version = getString(R.string.version_fmt, Updater.installedVersionName(this), Updater.installedVersionCode(this)),
             status = getString(R.string.status_idle),
@@ -119,8 +144,9 @@ class MainActivity : AppCompatActivity(), Updater.Listener {
                 val challenge = device.start()
                 signInChallenge = challenge
                 val account = device.finish(challenge)
-                val id = google.resolveProfile(account, profile)
-                GoogleAccount.save(applicationContext, id, account)
+                val linked = google.resolveProfile(account, profile)
+                val id = GoogleAccount.localProfileForUser(applicationContext, account.userId) ?: linked
+                GoogleAccount.save(applicationContext, id, account, linked)
                 val synced = repository.useGoogleProfile(id, account.name, account.photoUrl)
                 account.name to synced
             }

@@ -17,7 +17,7 @@ import java.time.OffsetDateTime
 
 /** One change on the TV: kind is profile, delete_profile, watched, interested or progress. */
 class ProfileEvent(val profile: String, val kind: String, val titleId: Int?, val value: JSONObject, val createdAt: String) {
-    fun toJson(): JSONObject = JSONObject().put("profile_id", profile).put("kind", kind)
+    fun toJson(cloudProfile: String = profile): JSONObject = JSONObject().put("profile_id", cloudProfile).put("kind", kind)
         .put("title_id", titleId ?: JSONObject.NULL).put("value", value).put("created_at", createdAt)
 
     companion object {
@@ -63,10 +63,10 @@ object ProfileSync {
     fun instant(s: String?): Instant? = s?.let { runCatching { OffsetDateTime.parse(it).toInstant() }.recoverCatching { Instant.parse(s) }.getOrNull() }
 
     /** Sends events; true when Supabase took them all. */
-    fun send(events: List<ProfileEvent>): Boolean {
+    fun send(events: List<ProfileEvent>, accessToken: String, cloudProfile: String): Boolean {
         if (events.isEmpty()) return true
         if (!CatalogueSource.configured) return false
-        val body = JSONArray().also { a -> events.forEach { e -> a.put(e.toJson().put("device", "tv")) } }.toString()
+        val body = JSONArray().also { a -> events.forEach { e -> a.put(e.toJson(cloudProfile).put("device", "tv")) } }.toString()
         val c = URL("${BuildConfig.SUPABASE_URL.trimEnd('/')}/rest/v1/profile_events").openConnection() as HttpURLConnection
         return try {
             c.requestMethod = "POST"
@@ -74,7 +74,7 @@ object ProfileSync {
             c.connectTimeout = 10_000
             c.readTimeout = 20_000
             c.setRequestProperty("apikey", BuildConfig.SUPABASE_KEY)
-            c.setRequestProperty("Authorization", "Bearer ${BuildConfig.SUPABASE_KEY}")
+            c.setRequestProperty("Authorization", "Bearer $accessToken")
             c.setRequestProperty("Content-Type", "application/json")
             c.setRequestProperty("Prefer", "return=minimal")
             c.outputStream.use { it.write(body.toByteArray()) }
@@ -86,18 +86,35 @@ object ProfileSync {
         }
     }
 
-    /** Downloads every profile and its rows, as the cache text (ServerProfiles.parse reads it). */
-    fun fetch(): String {
-        val profiles = JSONArray(CatalogueSource.getPath("profiles?select=*"))
+    /** Downloads only profiles signed in on this device, using each account's own access token. */
+    fun fetch(tokens: Map<String, Pair<String, String>>): String {
+        val profiles = JSONArray()
         val titles = JSONArray()
-        var offset = 0
-        while (true) {
-            val page = JSONArray(CatalogueSource.getPath("profile_titles?select=*&order=profile_id,title_id&limit=1000&offset=$offset"))
-            for (i in 0 until page.length()) titles.put(page.get(i))
-            if (page.length() < 1000) break
-            offset += 1000
+        for ((profile, cloudAndToken) in tokens) {
+            val (cloudProfile, token) = cloudAndToken
+            val id = java.net.URLEncoder.encode(cloudProfile, "UTF-8")
+            val p = JSONArray(getOwned("profiles?select=*&id=eq.$id", token))
+            for (i in 0 until p.length()) profiles.put(p.getJSONObject(i).put("id", profile))
+            var offset = 0
+            while (true) {
+                val page = JSONArray(getOwned("profile_titles?select=*&profile_id=eq.$id&order=title_id&limit=1000&offset=$offset", token))
+                for (i in 0 until page.length()) titles.put(page.getJSONObject(i).put("profile_id", profile))
+                if (page.length() < 1000) break
+                offset += 1000
+            }
         }
         return JSONObject().put("profiles", profiles).put("titles", titles).toString()
+    }
+
+    private fun getOwned(path: String, token: String): String {
+        val c = URL("${BuildConfig.SUPABASE_URL.trimEnd('/')}/rest/v1/$path").openConnection() as HttpURLConnection
+        return try {
+            c.connectTimeout = 10_000; c.readTimeout = 20_000
+            c.setRequestProperty("apikey", BuildConfig.SUPABASE_KEY)
+            c.setRequestProperty("Authorization", "Bearer $token")
+            check(c.responseCode in 200..299) { "Could not load account data" }
+            c.inputStream.bufferedReader().use { it.readText() }
+        } finally { c.disconnect() }
     }
 
     /** One profile's state: the Master's rows, with this TV's newer changes on top. Older TV changes are dropped. */

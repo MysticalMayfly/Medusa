@@ -17,6 +17,7 @@ import com.priyabrat.medusa.data.library.Profile
 import com.priyabrat.medusa.data.library.Profiles
 import com.priyabrat.medusa.data.library.ProfileEvent
 import com.priyabrat.medusa.data.library.ProfileSync
+import com.priyabrat.medusa.data.library.OutboxDispatch
 import com.priyabrat.medusa.data.library.ServerProfiles
 import org.json.JSONObject
 import com.priyabrat.medusa.data.library.Service
@@ -854,7 +855,12 @@ class LibraryRepository(private val store: LibraryStore) : MedusaRepository {
     private fun flush() {
         synchronized(outboxLock) {
             val pending = store.loadOutbox()
-            if (pending.isNotEmpty() && ProfileSync.send(pending)) store.saveOutbox(emptyList())
+            if (pending.isNotEmpty()) {
+                val remaining = OutboxDispatch.dispatch(pending, { it.profile }, googleAccessToken) { events, token ->
+                    googleCloudProfile(events.first().profile)?.let { cloud -> ProfileSync.send(events, token, cloud) } ?: false
+                }
+                if (remaining.size != pending.size) store.saveOutbox(remaining)
+            }
         }
     }
 
@@ -864,10 +870,15 @@ class LibraryRepository(private val store: LibraryStore) : MedusaRepository {
      */
     suspend fun syncProfiles() = kotlinx.coroutines.withContext(Dispatchers.IO) { profileMutex.withLock {
         flush()
-        val text = ProfileSync.fetch()
+        val ps = profilesFlow.value
+        val tokens = ps.list.mapNotNull { p ->
+            val token = googleAccessToken(p.id)
+            val cloud = googleCloudProfile(p.id)
+            if (token == null || cloud == null) null else p.id to (cloud to token)
+        }.toMap()
+        val text = ProfileSync.fetch(tokens)
         val server = ServerProfiles.parse(text)
         store.saveServerProfiles(text)
-        val ps = profilesFlow.value
         val pending = synchronized(outboxLock) { store.loadOutbox() }
         val waiting = pending.filter { it.kind == "profile" }.map { it.profile }.toSet()
         val gone = pending.filter { it.kind == "delete_profile" }.map { it.profile }.toSet()
@@ -892,6 +903,8 @@ class LibraryRepository(private val store: LibraryStore) : MedusaRepository {
 
     /** Set by MainActivity: whether a profile has a Google session. */
     var googleSignedIn: (String) -> Boolean = { false }
+    var googleAccessToken: (String) -> String? = { null }
+    var googleCloudProfile: (String) -> String? = { null }
     private val googleSessionRevision = MutableStateFlow(0)
 
     suspend fun useGuestProfile() = kotlinx.coroutines.withContext(Dispatchers.IO) {
